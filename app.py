@@ -679,27 +679,4 @@ elif menu == "🔍 ค้นหาสินค้า & Tag":
         if view_res_type == "🖼️ แสดงรูปภาพ (Cards)":
             render_product_cards(res_df, "หลายโซน")
         else:
-            st.dataframe(res_df.drop(columns=["ชื่อไฟล์ที่มา"], errors="ignore"), use_container_width=True)# --- ระบบล็อกอินป้องกันคนนอกเข้าดู ---
-def check_password():
-    def password_entered():
-        if st.session_state["password"] == "1234":
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]
-        else:
-            st.session_state["password_correct"] = False
-
-    if "password_correct" not in st.session_state:
-        st.title("🔒 ระบบจัดการคลังสินค้า")
-        st.text_input("กรุณาใส่รหัสผ่านเพื่อเข้าใช้งาน:", type="password", on_change=password_entered, key="password")
-        return False
-    elif not st.session_state["password_correct"]:
-        st.title("🔒 ระบบจัดการคลังสินค้า")
-        st.text_input("กรุณาใส่รหัสผ่านเพื่อเข้าใช้งาน:", type="password", on_change=password_entered, key="password")
-        st.error("❌ รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง")
-        return False
-    else:
-        return True
-
-if not check_password():
-    st.stop()
-# ------------------------------------
+            st.dataframe(res_df.drop(columns=["ชื่อไฟล์ที่มา"], errors="ignore"), use_container_width=True)
