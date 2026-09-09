@@ -8,6 +8,31 @@ import altair as alt
 from datetime import datetime
 from pypdf import PdfReader
 
+# --- 1. ระบบล็อกอินป้องกันคนนอกเข้าดู ---
+def check_password():
+    def password_entered():
+        if st.session_state["password"] == "1234":
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.title("🔒 ระบบจัดการคลังสินค้า TKK ERP")
+        st.text_input("กรุณาใส่รหัสผ่านเพื่อเข้าใช้งาน:", type="password", on_change=password_entered, key="password")
+        return False
+    elif not st.session_state["password_correct"]:
+        st.title("🔒 ระบบจัดการคลังสินค้า TKK ERP")
+        st.text_input("กรุณาใส่รหัสผ่านเพื่อเข้าใช้งาน:", type="password", on_change=password_entered, key="password")
+        st.error("❌ รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง")
+        return False
+    else:
+        return True
+
+if not check_password():
+    st.stop()
+# ------------------------------------
+
 # ตั้งค่าหน้าเว็บ
 st.set_page_config(
     page_title="TKK ERP - ระบบจัดการสต็อกและคลังสินค้า",
@@ -156,7 +181,6 @@ def clean_and_prepare_df(raw_df, source_name, target_zone):
     df.columns = [f"{c}_{i}" if list(df.columns).count(c) > 1 else c for i, c in enumerate(df.columns)]
     df["โซน"] = str(target_zone).upper().strip()
 
-    # ตรวจหาตำแหน่งคอลัมน์ A (รหัสรอง), B (บาร์โค้ด+ชื่อสินค้า), D (แท็ก), E (คงเหลือ)
     name_col = df.columns[1] if len(df.columns) >= 2 else df.columns[0]
     sub_col = df.columns[0] if len(df.columns) >= 1 and df.columns[0] != name_col else None
     
@@ -180,7 +204,6 @@ def clean_and_prepare_df(raw_df, source_name, target_zone):
         if raw_sub.lower() in ["nan", "none", "-"]:
             raw_sub = ""
         
-        # ค้นหาเลขบาร์โค้ด 8-14 หลักจากคอลัมน์ B
         bc_match = re.search(r'(\d{8,14})', raw_text)
         if bc_match:
             bc_val = bc_match.group(1)
@@ -189,14 +212,12 @@ def clean_and_prepare_df(raw_df, source_name, target_zone):
             bc_val = ""
             name_val = raw_text
 
-        # ตรวจสอบแท็กจากคอลัมน์ D
         if tag_col and pd.notna(row[tag_col]) and str(row[tag_col]).strip() and str(row[tag_col]).lower() != "nan":
             tag_val = format_tag_value(row[tag_col])
             _, clean_n = parse_tag_and_clean_name(name_val)
         else:
             tag_val, clean_n = parse_tag_and_clean_name(name_val)
 
-        # หากไม่มีบาร์โค้ด 13 หลัก ให้ตรวจสอบว่าในคอลัมน์ A เป็นบาร์โค้ดหรือไม่
         if not bc_val and len(raw_sub) >= 8:
             bc_val = raw_sub
             raw_sub = ""
@@ -409,7 +430,6 @@ with st.sidebar:
             st.caption("ยังไม่มีข้อมูลในระบบ")
 
     st.divider()
-    # ปุ่มรีเซ็ตล้างฐานข้อมูลทั้งหมด
     with st.expander("⚠️ ล้างฐานข้อมูลระบบทั้งหมด (Reset)", expanded=False):
         st.caption("กดปุ่มนี้เพื่อล้างข้อมูลสินค้าทุกโซนทิ้งทั้งหมด และเริ่มอัปโหลดใหม่ตั้งแต่ต้น")
         if st.button("🔥 ยืนยันล้างข้อมูลทั้งหมด", type="secondary"):
