@@ -8,6 +8,53 @@ import streamlit as st
 
 st.set_page_config(page_title="TKK ERP - จัดการคลังและโซนสินค้า", layout="wide")
 
+# ==========================================
+# 🔑 กำหนดรหัสผ่านสำหรับเข้าใช้งานระบบ
+# ==========================================
+APP_PASSWORD = "1234"  # <-- เปลี่ยนรหัสผ่านที่ต้องการตรงนี้
+
+# ระบบตรวจสอบการล็อกอิน (Session State)
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+def check_password():
+    def password_entered():
+        if st.session_state["password_input"] == APP_PASSWORD:
+            st.session_state.authenticated = True
+            del st.session_state["password_input"]
+        else:
+            st.session_state.authenticated = False
+
+    if not st.session_state.authenticated:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 1.2, 1])
+        with col2:
+            with st.container(border=True):
+                st.markdown("<h2 style='text-align: center;'>🔒 เข้าสู่ระบบ</h2>", unsafe_allow_html=True)
+                st.caption("ระบบจัดการคลังและโซนสินค้า TKK ERP")
+                st.text_input(
+                    "กรุณากรอกรหัสผ่าน (Password):", 
+                    type="password", 
+                    key="password_input",
+                    on_change=password_entered
+                )
+                if st.button("เข้าสู่ระบบ", type="primary", use_container_width=True):
+                    password_entered()
+                    if not st.session_state.authenticated:
+                        st.error("❌ รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง")
+                    else:
+                        st.rerun()
+        return False
+    return True
+
+# หากยังไม่ได้ล็อกอิน ให้หยุดการทำงานและแสดงเฉพาะหน้ากรอกรหัสผ่าน
+if not check_password():
+    st.stop()
+
+# ==========================================
+# 🚀 เริ่มการทำงานของระบบหลัก (เมื่อล็อกอินผ่าน)
+# ==========================================
+
 # ซ่อนปุ่มกากบาทของ uploader
 st.markdown("""
 <style>
@@ -118,7 +165,6 @@ def render_product_cards(items_df, current_zone):
         if not name or name.lower() == "nan":
             name = str(row.get("แท็ก • ชื่อรายการสินค้า", "-")).strip()
             
-        qty = row.get("จำนวนสั่งล่าสุด", 0)
         stock = str(row.get("คงเหลือ", "0")).replace(".0", "")
         
         code_for_img = barcode if (barcode and len(barcode) >= 5) else sub_code
@@ -152,6 +198,12 @@ if "uploader_key" not in st.session_state:
 with st.sidebar:
     st.title("📦 การจัดการสต็อก")
     
+    # ปุ่มออกจากระบบ (Logout)
+    if st.button("🚪 ออกจากระบบ (Logout)", use_container_width=True):
+        st.session_state.authenticated = False
+        st.rerun()
+        
+    st.divider()
     st.markdown("##### 🧭 ฟังก์ชันการทำงาน")
     selected_menu = st.radio(
         "เลือกฟังก์ชัน:",
@@ -315,7 +367,6 @@ elif selected_menu == "สินค้าที่มีปัญหา (คง�
         if not df_negative.empty:
             st.error(f"ตรวจพบสินค้าติดลบทั้งหมด {len(df_negative):,} รายการทั่วทั้งระบบ")
             
-            # 1. เลือกกรองตาม Tag
             unique_neg_tags = sorted(list(df_negative["แท็ก {Tag}"].dropna().unique()))
             selected_neg_tag = st.selectbox(
                 "🏷️ กรองดูตามกลุ่มแท็กสินค้าติดลบ:", 
@@ -332,7 +383,6 @@ elif selected_menu == "สินค้าที่มีปัญหา (คง�
                 report_title = f"รายงานสินค้าติดลบ แท็ก {selected_neg_tag}"
                 file_name_suffix = f"แท็ก_{clean_tag}"
 
-            # 2. ปุ่มดาวน์โหลดและตารางแสดงข้อมูล
             st.subheader(f"📋 ตารางข้อมูล: {report_title} ({len(active_neg_df):,} รายการ)")
             display_neg_df = active_neg_df.drop(columns=["ชื่อไฟล์ที่มา"], errors="ignore")
             
@@ -354,7 +404,6 @@ elif selected_menu == "สินค้าที่มีปัญหา (คง�
 
             st.divider()
 
-            # 3. แสดงรูปภาพสินค้าติดลบ (ไม่มีปุ่มใส่ตะกร้า)
             st.markdown("##### 🖼️ รายการการ์ดรูปภาพสินค้าติดลบ")
             total_neg_count = len(active_neg_df)
             total_neg_pages = max(1, math.ceil(total_neg_count / ITEMS_PER_PAGE))
