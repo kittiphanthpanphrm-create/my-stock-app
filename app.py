@@ -15,10 +15,9 @@ st.set_page_config(
 # ==========================================
 # 🔑 กำหนดรหัสผ่าน
 # ==========================================
-APP_PASSWORD = "1234"         # รหัสผ่านสำหรับเข้าใช้งานระบบทั่วไป
-ADMIN_PASSWORD = "admin8888"   # รหัสผ่านสำหรับปลดล็อกช่องอัปโหลดไฟล์ (แก้ไขได้ตามต้องการ)
+APP_PASSWORD = "1234"         # รหัสผ่านเข้าใช้งานทั่วไป
+ADMIN_PASSWORD = "admin8888"   # รหัสผ่านปลดล็อกโหมด Admin
 
-# ตรวจสอบการเข้าสู่ระบบทั่วไป
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "admin_authenticated" not in st.session_state:
@@ -169,46 +168,118 @@ def extract_fields_from_text(text, source_name, target_zone):
         })
     return pd.DataFrame(data)
 
-def clean_and_prepare_df(raw_df, source_name, target_zone):
+def clean_and_prepare_df(raw_df, source_name, default_zone):
     df = raw_df.copy()
+    
+    # ดึงรหัสสินค้า
     for col in df.columns:
         c_str = str(col).strip()
-        if "รหัสสินค้า" in c_str or c_str == "รหัส":
+        if "รหัสสินค้า" in c_str or c_str == "รหัส" or "barcode" in c_str.lower():
             df["รหัสสินค้า"] = df[col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-        if "รหัสรอง" in c_str:
+        if "รหัสรอง" in c_str or "sub" in c_str.lower():
             df["รหัสรอง"] = df[col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
+    # ดึงชื่อสินค้า
     name_col = next(
         (c for c in df.columns if "ชื่อรายการสินค้า" in str(c) or "ชื่อ" in str(c) or "รายละ" in str(c)),
-        df.columns[2] if len(df.columns) > 2 else df.columns[0]
+        None
     )
-    df["ชื่อรายการสินค้า"] = df[name_col].astype(str).apply(lambda x: re.sub(r'\{[^}]+\}', '', x).replace("•", "").strip())
+    if name_col:
+        df["ชื่อรายการสินค้า"] = df[name_col].astype(str).apply(lambda x: re.sub(r'\{[^}]+\}', '', str(x)).replace("•", "").strip())
+    elif "ชื่อรายการสินค้า" not in df.columns:
+        df["ชื่อรายการสินค้า"] = "-"
 
+    # ดึงแท็ก Tag
     tag_col = next((c for c in df.columns if "แท็ก" in str(c) and "ชื่อ" not in str(c)), None)
     if tag_col:
         df["แท็ก {Tag}"] = df[tag_col].fillna("{ทั่วไป}").astype(str).str.strip()
-    else:
+    elif name_col:
         def get_tag(x):
             m = re.search(r'\{([^}]+)\}', str(x))
             return f"{{{m.group(1).strip()}}}" if m else "{ทั่วไป}"
         df["แท็ก {Tag}"] = df[name_col].astype(str).apply(get_tag)
-
-    for c in df.columns:
-        c_str = str(c).strip()
-        if "สั่ง" in c_str:
-            df["จำนวนสั่งล่าสุด"] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int).astype(str)
-        if "คงเหลือ" in c_str:
-            df["คงเหลือ"] = df[c].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-
-    if "โซน" not in df.columns:
-        df["โซน"] = target_zone
     else:
-        df["โซน"] = df["โซน"].fillna(target_zone).astype(str).str.strip()
+        df["แท็ก {Tag}"] = "{ทั่วไป}"
+
+    # ดึงจำนวน / คงเหลือ
+    qty_col = next((c for c in df.columns if any(k in str(c) for k in ["คงเหลือ", "จำนวน", "ยอด", "qty", "quantity"])), None)
+    if qty_col:
+        df["คงเหลือ"] = df[qty_col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+    elif "คงเหลือ" not in df.columns:
+        df["คงเหลือ"] = "0"
+
+    # ดึงโซน (หากในไฟล์มีคอลัมน์โซน ให้ใช้โซนจากไฟล์ ถ้าไม่มีให้ใช้ default_zone)
+    zone_col = next((c for c in df.columns if "โซน" in str(c) or "zone" in str(c).lower()), None)
+    if zone_col:
+        df["โซน"] = df[zone_col].fillna(default_zone).astype(str).str.upper().str.strip()
+    else:
+        df["โซน"] = default_zone
 
     df["ชื่อไฟล์ที่มา"] = source_name
     standard_cols = ["รหัสสินค้า", "รหัสรอง", "ชื่อรายการสินค้า", "แท็ก {Tag}", "หน่วยนับ", "จำนวนสั่งล่าสุด", "โซน", "คงเหลือ", "สถานะ", "ชื่อไฟล์ที่มา"]
-    existing_cols = [c for c in standard_cols if c in df.columns]
-    return df[existing_cols]
+    for sc in standard_cols:
+        if sc not in df.columns:
+            df[sc] = "-"
+            
+    return df[standard_cols]
+
+def process_inventory_transactions(master_df, incoming_df, action_type):
+    """
+    ประมวลผลการคำนวณสต็อก:
+    - action_type == 'ADD': รับเข้าสินค้า (+ สต็อก)
+    - action_type == 'SUB': ขายสินค้าออก (- สต็อก)
+    - action_type == 'SET': อัปเดตทับ / ตั้งต้นสต็อก
+    """
+    if master_df.empty:
+        return incoming_df
+
+    master = master_df.copy()
+    
+    # ทำ mapping ดัชนีด้วยรหัสสินค้า
+    master["รหัสสินค้า"] = master["รหัสสินค้า"].astype(str).str.strip()
+    incoming = incoming_df.copy()
+    incoming["รหัสสินค้า"] = incoming["รหัสสินค้า"].astype(str).str.strip()
+    
+    master_indexed = master.set_index("รหัสสินค้า")
+    
+    for idx, row in incoming.iterrows():
+        bcode = row["รหัสสินค้า"]
+        if not bcode or bcode == "-" or bcode == "nan":
+            continue
+            
+        qty_in = pd.to_numeric(row.get("คงเหลือ", 0), errors="coerce")
+        qty_in = 0 if pd.isna(qty_in) else qty_in
+        
+        if bcode in master_indexed.index:
+            # มีสินค้าเดิมในระบบ
+            curr_stock = pd.to_numeric(master_indexed.at[bcode, "คงเหลือ"], errors="coerce")
+            curr_stock = 0 if pd.isna(curr_stock) else curr_stock
+            
+            if action_type == "ADD":
+                new_stock = curr_stock + qty_in
+            elif action_type == "SUB":
+                new_stock = curr_stock - qty_in
+            else:  # SET
+                new_stock = qty_in
+                
+            master_indexed.at[bcode, "คงเหลือ"] = str(int(new_stock) if new_stock == int(new_stock) else round(new_stock, 2))
+            
+            # อัปเดตโซนและข้อมูลรายการหากมีระบุมาใหม่
+            if row["โซน"] and row["โซน"] != "-":
+                master_indexed.at[bcode, "โซน"] = row["โซน"]
+            if row["ชื่อรายการสินค้า"] and row["ชื่อรายการสินค้า"] != "-":
+                master_indexed.at[bcode, "ชื่อรายการสินค้า"] = row["ชื่อรายการสินค้า"]
+            if row["แท็ก {Tag}"] and row["แท็ก {Tag}"] != "{ทั่วไป}":
+                master_indexed.at[bcode, "แท็ก {Tag}"] = row["แท็ก {Tag}"]
+        else:
+            # สินค้าใหม่
+            new_row = row.copy()
+            if action_type == "SUB":
+                new_row["คงเหลือ"] = str(-qty_in)
+            master_indexed.loc[bcode] = new_row
+            
+    updated_master = master_indexed.reset_index()
+    return updated_master
 
 def render_product_cards(items_df, current_zone):
     cols = st.columns(4)
@@ -299,7 +370,7 @@ with st.sidebar:
     
     st.divider()
     
-    # 3. ส่วนซ่อนการอัปโหลดไฟล์ + เข้ารหัส Admin (Admin Management Panel)
+    # 3. โหมดจัดการข้อมูล (Admin)
     st.markdown("""
         <div style="font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; border-left: 4px solid #f59e0b; padding-left: 8px;">
             ⚙️ โหมดจัดการข้อมูล (Admin)
@@ -307,7 +378,7 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     
     if not st.session_state.admin_authenticated:
-        with st.expander("🔒 ปลดล็อกเพื่ออัปโหลดข้อมูล (Admin Only)", expanded=False):
+        with st.expander("🔒 ปลดล็อกระบบจัดการ (Admin Only)", expanded=False):
             admin_pwd = st.text_input("กรอกรหัสผ่าน Admin:", type="password", key="admin_pwd_input")
             if st.button("ยืนยันปลดล็อก 🔓", use_container_width=True):
                 if admin_pwd == ADMIN_PASSWORD:
@@ -317,17 +388,29 @@ with st.sidebar:
                 else:
                     st.error("❌ รหัสผ่าน Admin ไม่ถูกต้อง")
     else:
-        st.success("🟢 เข้าสู่โหมด Admin แล้ว")
-        if st.button("🔒 ล็อกโหมด Admin", use_container_width=True):
+        st.success("🟢 โหมด Admin เปิดใช้งานอยู่")
+        if st.button("🔒 ปิดโหมด Admin", use_container_width=True):
             st.session_state.admin_authenticated = False
             st.rerun()
             
-        with st.expander(f"📥 แนบไฟล์ข้อมูลเข้าโซน {selected_zone}", expanded=True):
+        with st.expander("📥 อัปโหลดเอกสาร / จัดการธุรกรรมสต็อก", expanded=True):
+            # เลือกประเภทของเอกสารที่นำเข้า
+            trans_type = st.selectbox(
+                "ประเภทเอกสารที่นำเข้า:",
+                options=[
+                    "📥 รับเข้าสินค้า (+ บวกสต็อกเพิ่ม)",
+                    "📤 รายการขายสินค้า (- หักลบสต็อกออก)",
+                    "📋 อัปเดตข้อมูล Master (ตั้งต้นสต็อก)"
+                ]
+            )
+            
+            st.caption("💡 ไฟล์ Excel/CSV สามารถรวมรายการสินค้าหลายโซนได้ ระบบจะคัดแยกเข้าโซนให้อัตโนมัติ")
+            
             uploaded_files = st.file_uploader(
-                f"เลือกไฟล์สำหรับโซน {selected_zone} (PDF, CSV, XLSX)", 
+                "เลือกไฟล์เอกสาร (PDF, CSV, XLSX)", 
                 type=["pdf", "csv", "xlsx"], 
                 accept_multiple_files=True,
-                key=f"uploader_{selected_zone}_{st.session_state.uploader_key}"
+                key=f"uploader_{st.session_state.uploader_key}"
             )
             
             if uploaded_files:
@@ -344,27 +427,26 @@ with st.sidebar:
                             t_df = clean_and_prepare_df(pd.read_excel(u_file), u_file.name, selected_zone)
                         
                         if not t_df.empty:
-                            t_df["โซน"] = t_df["โซน"].replace({"": selected_zone, "-": selected_zone}).fillna(selected_zone)
                             preview_dfs.append(t_df)
                     except Exception as e:
                         st.error(f"ไฟล์ {u_file.name} มีปัญหา: {e}")
                 
                 if preview_dfs:
-                    combined_new_df = pd.concat(preview_dfs, ignore_index=True)
-                    st.info(f"พร้อมบันทึก: {len(combined_new_df)} รายการ")
+                    combined_incoming = pd.concat(preview_dfs, ignore_index=True)
+                    st.info(f"📄 พบข้อมูลที่พร้อมประมวลผล: {len(combined_incoming):,} รายการ")
                     
-                    if st.button("💾 อัปโหลดบันทึกเข้าสู่ระบบ", type="primary", use_container_width=True):
-                        if st.session_state.current_df.empty:
-                            st.session_state.current_df = combined_new_df
-                        else:
-                            # รวมข้อมูลเดิมและใหม่ (Upsert ข้อมูลตามรหัสสินค้า)
-                            st.session_state.current_df = pd.concat([st.session_state.current_df, combined_new_df], ignore_index=True)
-                            if "รหัสสินค้า" in st.session_state.current_df.columns:
-                                st.session_state.current_df.drop_duplicates(subset=["รหัสสินค้า"], keep="last", inplace=True)
+                    if st.button("⚡ บันทึกและคำนวณสต็อกอัตโนมัติ", type="primary", use_container_width=True):
+                        action_code = "ADD" if "รับเข้า" in trans_type else ("SUB" if "ขาย" in trans_type else "SET")
+                        
+                        st.session_state.current_df = process_inventory_transactions(
+                            st.session_state.current_df, 
+                            combined_incoming, 
+                            action_code
+                        )
                         
                         save_database(st.session_state.current_df)
                         st.session_state.uploader_key += 1
-                        st.success("บันทึกข้อมูลเรียบร้อย!")
+                        st.success("ประมวลผลและอัปเดตสต็อก 30 โซนสำเร็จเรียบร้อย!")
                         st.rerun()
 
         with st.expander(f"📁 ลบข้อมูลไฟล์ในโซน {selected_zone}", expanded=False):
@@ -381,15 +463,14 @@ with st.sidebar:
                         st.success("ลบข้อมูลสำเร็จ")
                         st.rerun()
 
-        # ปุ่มสำรองฐานข้อมูล Master Database เพื่อป้องกันข้อมูลสูญหาย
         if not st.session_state.current_df.empty:
             st.divider()
             output_backup = io.BytesIO()
             st.session_state.current_df.to_csv(output_backup, index=False, encoding="utf-8-sig")
             st.download_button(
-                label="📥 สำรองไฟล์ฐานข้อมูลรวม (Backup CSV)",
+                label="📥 สำรองฐานข้อมูลรวม 30 โซน (Backup CSV)",
                 data=output_backup.getvalue(),
-                file_name="database_inventory_backup.csv",
+                file_name="database_master_30zones.csv",
                 mime="text/csv",
                 use_container_width=True
             )
