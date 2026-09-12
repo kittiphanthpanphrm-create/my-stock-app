@@ -1,3 +1,4 @@
+import datetime
 import io
 import math
 import os
@@ -121,6 +122,7 @@ st.markdown("""
 # 🚀 ตัวแปรและฟังก์ชันระบบคลังสินค้า
 # ==========================================
 DB_FILE = "database_inventory.csv"
+LOG_FILE = "transactions_history.csv"
 NO_IMAGE_PLACEHOLDER = "https://placehold.co/400x400/f8fafc/94a3b8?text=No+Image"
 ITEMS_PER_PAGE = 48
 
@@ -141,6 +143,17 @@ def load_database():
 
 def save_database(df):
     df.to_csv(DB_FILE, index=False, encoding="utf-8-sig")
+
+def load_transactions():
+    if os.path.exists(LOG_FILE):
+        try:
+            return pd.read_csv(LOG_FILE, dtype=str)
+        except Exception:
+            return pd.DataFrame()
+    return pd.DataFrame(columns=["วันเวลาทำรายการ", "ประเภทธุรกรรม", "รหัสสินค้า", "รหัสรอง", "ชื่อรายการสินค้า", "แท็ก {Tag}", "โซน", "จำนวน", "ชื่อไฟล์ที่มา"])
+
+def save_transactions(df):
+    df.to_csv(LOG_FILE, index=False, encoding="utf-8-sig")
 
 def extract_fields_from_text(text, source_name, target_zone):
     pattern = re.compile(
@@ -218,9 +231,9 @@ def clean_and_prepare_df(raw_df, source_name, default_zone):
             
     return df[standard_cols]
 
-def process_inventory_transactions(master_df, incoming_df, action_type):
+def process_inventory_transactions(master_df, incoming_df, action_type, type_label):
     if master_df.empty:
-        return incoming_df
+        return incoming_df, pd.DataFrame()
 
     master = master_df.copy()
     master["รหัสสินค้า"] = master["รหัสสินค้า"].astype(str).str.strip()
@@ -228,6 +241,8 @@ def process_inventory_transactions(master_df, incoming_df, action_type):
     incoming["รหัสสินค้า"] = incoming["รหัสสินค้า"].astype(str).str.strip()
     
     master_indexed = master.set_index("รหัสสินค้า")
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_records = []
     
     for idx, row in incoming.iterrows():
         bcode = row["รหัสสินค้า"]
@@ -236,6 +251,11 @@ def process_inventory_transactions(master_df, incoming_df, action_type):
             
         qty_in = pd.to_numeric(row.get("คงเหลือ", 0), errors="coerce")
         qty_in = 0 if pd.isna(qty_in) else qty_in
+        
+        target_name = row["ชื่อรายการสินค้า"]
+        target_sub = row["รหัสรอง"]
+        target_tag = row["แท็ก {Tag}"]
+        target_zone = row["โซน"]
         
         if bcode in master_indexed.index:
             curr_stock = pd.to_numeric(master_indexed.at[bcode, "คงเหลือ"], errors="coerce")
@@ -250,19 +270,42 @@ def process_inventory_transactions(master_df, incoming_df, action_type):
                 
             master_indexed.at[bcode, "คงเหลือ"] = str(int(new_stock) if new_stock == int(new_stock) else round(new_stock, 2))
             
-            if row["โซน"] and row["โซน"] != "-":
-                master_indexed.at[bcode, "โซน"] = row["โซน"]
-            if row["ชื่อรายการสินค้า"] and row["ชื่อรายการสินค้า"] != "-":
-                master_indexed.at[bcode, "ชื่อรายการสินค้า"] = row["ชื่อรายการสินค้า"]
-            if row["แท็ก {Tag}"] and row["แท็ก {Tag}"] != "{ทั่วไป}":
-                master_indexed.at[bcode, "แท็ก {Tag}"] = row["แท็ก {Tag}"]
+            if target_zone and target_zone != "-":
+                master_indexed.at[bcode, "โซน"] = target_zone
+            else:
+                target_zone = master_indexed.at[bcode, "โซน"]
+                
+            if target_name and target_name != "-":
+                master_indexed.at[bcode, "ชื่อรายการสินค้า"] = target_name
+            else:
+                target_name = master_indexed.at[bcode, "ชื่อรายการสินค้า"]
+                
+            if target_tag and target_tag != "{ทั่วไป}":
+                master_indexed.at[bcode, "แท็ก {Tag}"] = target_tag
+            else:
+                target_tag = master_indexed.at[bcode, "แท็ก {Tag}"]
+                
+            if not target_sub or target_sub == "-":
+                target_sub = master_indexed.at[bcode, "รหัสรอง"]
         else:
             new_row = row.copy()
             if action_type == "SUB":
                 new_row["คงเหลือ"] = str(-qty_in)
             master_indexed.loc[bcode] = new_row
             
-    return master_indexed.reset_index()
+        log_records.append({
+            "วันเวลาทำรายการ": now_str,
+            "ประเภทธุรกรรม": type_label,
+            "รหัสสินค้า": bcode,
+            "รหัสรอง": target_sub,
+            "ชื่อรายการสินค้า": target_name,
+            "แท็ก {Tag}": target_tag,
+            "โซน": target_zone,
+            "จำนวน": str(int(qty_in) if qty_in == int(qty_in) else round(qty_in, 2)),
+            "ชื่อไฟล์ที่มา": row.get("ชื่อไฟล์ที่มา", "-")
+        })
+        
+    return master_indexed.reset_index(), pd.DataFrame(log_records)
 
 def render_product_cards(items_df, current_zone):
     cols = st.columns(4)
@@ -303,6 +346,8 @@ def render_product_cards(items_df, current_zone):
 
 if "current_df" not in st.session_state:
     st.session_state.current_df = load_database()
+if "trans_df" not in st.session_state:
+    st.session_state.trans_df = load_transactions()
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
 
@@ -321,7 +366,7 @@ with st.sidebar:
         
     st.divider()
     
-    # 1. หัวข้อหลัก: ฟังก์ชันการทำงาน
+    # 1. ฟังก์ชันการทำงาน
     st.markdown("""
         <div style="font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; border-left: 4px solid #2563eb; padding-left: 8px;">
             🧭 ฟังก์ชันการทำงาน
@@ -332,6 +377,7 @@ with st.sidebar:
         "เลือกฟังก์ชัน:",
         options=[
             "📊 แดชบอร์ดภาพรวมระบบ",
+            "📑 รายงานรับเข้า & ขายสินค้า",
             "📦 จัดการสินค้า (รายโซน)",
             "⚠️ สินค้ามีปัญหา (สต็อกติดลบ)",
             "📊 สต็อกสินค้า 0 ถึง 3000",
@@ -344,7 +390,7 @@ with st.sidebar:
     
     st.divider()
     
-    # 2. หัวข้อหลัก: โซนสินค้า (30 โซน)
+    # 2. โซนสินค้า (30 โซน)
     st.markdown("""
         <div style="font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; border-left: 4px solid #10b981; padding-left: 8px;">
             📍 โซนสินค้า (30 โซน)
@@ -354,7 +400,7 @@ with st.sidebar:
     
     st.divider()
     
-    # 3. หัวข้อหลัก: โหมด Admin
+    # 3. โหมด Admin
     st.markdown("""
         <div style="font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; border-left: 4px solid #f59e0b; padding-left: 8px;">
             ⚙️ โหมดจัดการข้อมูล (Admin)
@@ -418,16 +464,24 @@ with st.sidebar:
                     
                     if st.button("⚡ บันทึกและคำนวณสต็อกอัตโนมัติ", type="primary", use_container_width=True):
                         action_code = "ADD" if "รับเข้า" in trans_type else ("SUB" if "ขาย" in trans_type else "SET")
+                        type_str = "รับเข้าสินค้า" if "รับเข้า" in trans_type else ("ขายสินค้า" if "ขาย" in trans_type else "ตั้งต้น Master")
                         
-                        st.session_state.current_df = process_inventory_transactions(
+                        updated_inv, new_logs = process_inventory_transactions(
                             st.session_state.current_df, 
                             combined_incoming, 
-                            action_code
+                            action_code,
+                            type_str
                         )
                         
+                        st.session_state.current_df = updated_inv
                         save_database(st.session_state.current_df)
+                        
+                        if not new_logs.empty:
+                            st.session_state.trans_df = pd.concat([new_logs, st.session_state.trans_df], ignore_index=True)
+                            save_transactions(st.session_state.trans_df)
+                            
                         st.session_state.uploader_key += 1
-                        st.success("ประมวลผลสต็อกเรียบร้อย!")
+                        st.success("ประมวลผลสต็อกและบันทึกประวัติเรียบร้อย!")
                         st.rerun()
 
         with st.expander(f"📁 ลบข้อมูลไฟล์ในโซน {selected_zone}", expanded=False):
@@ -457,6 +511,7 @@ with st.sidebar:
             )
 
 df_all = st.session_state.current_df
+df_trans = st.session_state.trans_df
 
 # ==========================================
 # 🧭 จัดการแสดงผลตามเมนูที่เลือก
@@ -515,6 +570,31 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
                 </div>
             """, unsafe_allow_html=True)
 
+        # การ์ดสรุปยอดธุรกรรม รับเข้า / ขาย
+        if not df_trans.empty:
+            df_trans_calc = df_trans.copy()
+            df_trans_calc["จำนวน_num"] = pd.to_numeric(df_trans_calc["จำนวน"], errors="coerce").fillna(0)
+            in_sum = int(df_trans_calc[df_trans_calc["ประเภทธุรกรรม"] == "รับเข้าสินค้า"]["จำนวน_num"].sum())
+            out_sum = int(df_trans_calc[df_trans_calc["ประเภทธุรกรรม"] == "ขายสินค้า"]["จำนวน_num"].sum())
+            
+            tc1, tc2 = st.columns(2)
+            with tc1:
+                st.markdown(f"""
+                    <div class="kpi-card" style="border-left: 5px solid #059669;">
+                        <div class="kpi-title">📥 ยอดรวมรับเข้าสินค้าทั้งหมด</div>
+                        <div class="kpi-value" style="color: #059669;">+{in_sum:,} <span style="font-size: 15px;">ชิ้น</span></div>
+                        <div class="kpi-sub">บันทึกสะสมจากเอกสารรับเข้า</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            with tc2:
+                st.markdown(f"""
+                    <div class="kpi-card" style="border-left: 5px solid #ef4444;">
+                        <div class="kpi-title">📤 ยอดรวมขายสินค้าทั้งหมด</div>
+                        <div class="kpi-value" style="color: #ef4444;">-{out_sum:,} <span style="font-size: 15px;">ชิ้น</span></div>
+                        <div class="kpi-sub">บันทึกสะสมจากเอกสารยอดขาย</div>
+                    </div>
+                """, unsafe_allow_html=True)
+
         st.write("")
 
         col_g1, col_g2 = st.columns([1.6, 1])
@@ -557,7 +637,62 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
     else:
         st.info("💡 ขณะนี้ยังไม่มีข้อมูลในระบบ สามารถล็อกอินโหมด Admin เพื่อเริ่มนำเข้าข้อมูลได้ทันที")
 
-# --- 1. หน้าจัดการสินค้า (รายโซน) ---
+# --- 1. หน้าแสดงรายงานรับเข้า & ขายสินค้า ---
+elif "รายงานรับเข้า & ขายสินค้า" in selected_menu:
+    st.markdown("""
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+            <h1 style="font-size: 28px; font-weight: 800; margin: 0; color: #0f172a;">📑 รายงานประวัติการรับเข้าและยอดขายสินค้า (30 โซน)</h1>
+        </div>
+        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">ตรวจสอบบันทึกธุรกรรมการนำเข้าและยอดขายสินค้าที่ถูกประมวลผลเข้าระบบ</p>
+    """, unsafe_allow_html=True)
+
+    if not df_trans.empty:
+        f_c1, f_c2, f_c3 = st.columns(3)
+        with f_c1:
+            trans_filter = st.selectbox("กรองประเภทรายการ:", options=["แสดงทั้งหมด", "รับเข้าสินค้า", "ขายสินค้า", "ตั้งต้น Master"])
+        with f_c2:
+            zones_in_log = ["แสดงทุกโซน"] + sorted(list(df_trans["โซน"].dropna().unique()))
+            zone_filter = st.selectbox("กรองตามโซน:", options=zones_in_log)
+        with f_c3:
+            tags_in_log = ["แสดงทุกแท็ก"] + sorted(list(df_trans["แท็ก {Tag}"].dropna().unique()))
+            tag_filter = st.selectbox("กรองตามแท็ก:", options=tags_in_log)
+
+        filtered_trans = df_trans.copy()
+        if trans_filter != "แสดงทั้งหมด":
+            filtered_trans = filtered_trans[filtered_trans["ประเภทธุรกรรม"] == trans_filter]
+        if zone_filter != "แสดงทุกโซน":
+            filtered_trans = filtered_trans[filtered_trans["โซน"] == zone_filter]
+        if tag_filter != "แสดงทุกแท็ก":
+            filtered_trans = filtered_trans[filtered_trans["แท็ก {Tag}"] == tag_filter]
+
+        filtered_trans["จำนวน_num"] = pd.to_numeric(filtered_trans["จำนวน"], errors="coerce").fillna(0)
+        total_items_log = len(filtered_trans)
+        total_qty_log = int(filtered_trans["จำนวน_num"].sum())
+
+        s_c1, s_c2 = st.columns(2)
+        with s_c1:
+            st.metric("📋 จำนวนแถวรายการในประวัติ", f"{total_items_log:,} รายการ")
+        with s_c2:
+            st.metric("🔢 ยอดรวมจำนวนชิ้นตามตัวกรอง", f"{total_qty_log:,} ชิ้น")
+
+        display_trans = filtered_trans.drop(columns=["จำนวน_num"], errors="ignore")
+        st.dataframe(display_trans, use_container_width=True)
+
+        out_trans = io.BytesIO()
+        with pd.ExcelWriter(out_trans, engine="openpyxl") as writer:
+            display_trans.to_excel(writer, sheet_name="Transactions", index=False)
+
+        st.download_button(
+            label="📥 ดาวน์โหลดประวัติรับเข้า-ขายสินค้า (Excel)",
+            data=out_trans.getvalue(),
+            file_name="ประวัติการรับเข้าและขายสินค้า.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary"
+        )
+    else:
+        st.info("💡 ยังไม่มีประวัติการรับเข้าหรือขายสินค้า เมื่ออัปโหลดเอกสารในโหมด Admin ประวัติจะแสดงที่นี่โดยอัตโนมัติ")
+
+# --- 2. หน้าจัดการสินค้า (รายโซน) ---
 elif "จัดการสินค้า" in selected_menu:
     if not df_all.empty and "โซน" in df_all.columns:
         df_zone = df_all[df_all["โซน"] == selected_zone].reset_index(drop=True)
@@ -631,7 +766,7 @@ elif "จัดการสินค้า" in selected_menu:
     else:
         st.info(f"👈 โซน {selected_zone} ยังไม่มีข้อมูล สามารถอัปโหลดไฟล์ที่แถบซ้ายมือได้เลยครับ")
 
-# --- 2. หน้าสินค้าที่มีปัญหา (คงเหลือติดลบ) ---
+# --- 3. หน้าสินค้าที่มีปัญหา (คงเหลือติดลบ) ---
 elif "ติดลบ" in selected_menu:
     st.markdown("## ⚠️ สินค้าที่มีปัญหา (ยอดคงเหลือติดลบ)")
     
@@ -707,7 +842,7 @@ elif "ติดลบ" in selected_menu:
     else:
         st.info("ยังไม่มีข้อมูลในระบบ")
 
-# --- 3. หน้าสินค้าสต็อก 0 ถึง 3000 ---
+# --- 4. หน้าสินค้าสต็อก 0 ถึง 3000 ---
 elif "0 ถึง 3000" in selected_menu:
     st.markdown("""
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
@@ -851,7 +986,7 @@ elif "0 ถึง 3000" in selected_menu:
     else:
         st.info("ยังไม่มีข้อมูลในระบบ")
 
-# --- 4. สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง) ---
+# --- 5. สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง) ---
 elif "สรุปสายงาน" in selected_menu:
     st.markdown("## 📊 ข้อมูลสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)")
     if not df_all.empty and "โซน" in df_all.columns:
@@ -863,7 +998,7 @@ elif "สรุปสายงาน" in selected_menu:
     else:
         st.info("ยังไม่มีข้อมูลสต็อกสินค้า")
 
-# --- 5. ค้นหาสินค้า & Tag ---
+# --- 6. ค้นหาสินค้า & Tag ---
 elif "ค้นหาสินค้า" in selected_menu:
     st.markdown("## 🔍 ค้นหาสินค้า & แท็กข้ามทุกโซน")
     with st.container(border=True):
