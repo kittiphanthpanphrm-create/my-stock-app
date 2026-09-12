@@ -366,7 +366,7 @@ with st.sidebar:
         
     st.divider()
     
-    # 1. ฟังก์ชันการทำงาน
+    # 1. ฟังก์ชันการทำงาน (คงเมนูเดิมไว้ 5 ตัวเลือก)
     st.markdown("""
         <div style="font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; border-left: 4px solid #2563eb; padding-left: 8px;">
             🧭 ฟังก์ชันการทำงาน
@@ -377,7 +377,6 @@ with st.sidebar:
         "เลือกฟังก์ชัน:",
         options=[
             "📊 แดชบอร์ดภาพรวมระบบ",
-            "📑 รายงานรับเข้า & ขายสินค้า",
             "📦 จัดการสินค้า (รายโซน)",
             "⚠️ สินค้ามีปัญหา (สต็อกติดลบ)",
             "📊 สต็อกสินค้า 0 ถึง 3000",
@@ -517,13 +516,13 @@ df_trans = st.session_state.trans_df
 # 🧭 จัดการแสดงผลตามเมนูที่เลือก
 # ==========================================
 
-# --- 0. หน้าแดชบอร์ดภาพรวมระบบ ---
+# --- 0. หน้าแดชบอร์ดภาพรวมระบบ (แสดงรายงานรับเข้า/ขายที่นี่) ---
 if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
     st.markdown("""
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
             <h1 style="font-size: 28px; font-weight: 800; margin: 0; color: #0f172a;">📊 แดชบอร์ดภาพรวมระบบคลังสินค้า (30 โซน)</h1>
         </div>
-        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">ศูนย์รวมสถิติ ตัวเลขชี้วัดหลัก (KPIs) และสถานะสต็อกสินค้าทั่วทั้งระบบ</p>
+        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">ศูนย์รวมสถิติ ตัวเลขชี้วัดหลัก (KPIs) สถานะสต็อกสินค้า และรายงานการรับเข้า-ขายสินค้าทั่วทั้งระบบ</p>
     """, unsafe_allow_html=True)
 
     if not df_all.empty and "คงเหลือ" in df_all.columns:
@@ -536,6 +535,7 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
         zero_items = (df_dash["คงเหลือ_ตัวเลข"] == 0).sum()
         active_zones_count = df_dash["โซน"].nunique() if "โซน" in df_dash.columns else 0
 
+        # KPI สต็อกคงคลัง
         c1, c2, c3, c4 = st.columns(4)
         with c1:
             st.markdown(f"""
@@ -570,33 +570,36 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
                 </div>
             """, unsafe_allow_html=True)
 
-        # การ์ดสรุปยอดธุรกรรม รับเข้า / ขาย
+        # KPI สรุปยอดรับเข้า / ยอดขาย
+        in_sum = 0
+        out_sum = 0
         if not df_trans.empty:
             df_trans_calc = df_trans.copy()
             df_trans_calc["จำนวน_num"] = pd.to_numeric(df_trans_calc["จำนวน"], errors="coerce").fillna(0)
             in_sum = int(df_trans_calc[df_trans_calc["ประเภทธุรกรรม"] == "รับเข้าสินค้า"]["จำนวน_num"].sum())
             out_sum = int(df_trans_calc[df_trans_calc["ประเภทธุรกรรม"] == "ขายสินค้า"]["จำนวน_num"].sum())
             
-            tc1, tc2 = st.columns(2)
-            with tc1:
-                st.markdown(f"""
-                    <div class="kpi-card" style="border-left: 5px solid #059669;">
-                        <div class="kpi-title">📥 ยอดรวมรับเข้าสินค้าทั้งหมด</div>
-                        <div class="kpi-value" style="color: #059669;">+{in_sum:,} <span style="font-size: 15px;">ชิ้น</span></div>
-                        <div class="kpi-sub">บันทึกสะสมจากเอกสารรับเข้า</div>
-                    </div>
-                """, unsafe_allow_html=True)
-            with tc2:
-                st.markdown(f"""
-                    <div class="kpi-card" style="border-left: 5px solid #ef4444;">
-                        <div class="kpi-title">📤 ยอดรวมขายสินค้าทั้งหมด</div>
-                        <div class="kpi-value" style="color: #ef4444;">-{out_sum:,} <span style="font-size: 15px;">ชิ้น</span></div>
-                        <div class="kpi-sub">บันทึกสะสมจากเอกสารยอดขาย</div>
-                    </div>
-                """, unsafe_allow_html=True)
+        tc1, tc2 = st.columns(2)
+        with tc1:
+            st.markdown(f"""
+                <div class="kpi-card" style="border-left: 5px solid #059669;">
+                    <div class="kpi-title">📥 ยอดรวมรับเข้าสินค้าทั้งหมด</div>
+                    <div class="kpi-value" style="color: #059669;">+{in_sum:,} <span style="font-size: 15px;">ชิ้น</span></div>
+                    <div class="kpi-sub">บันทึกสะสมจากเอกสารรับเข้า</div>
+                </div>
+            """, unsafe_allow_html=True)
+        with tc2:
+            st.markdown(f"""
+                <div class="kpi-card" style="border-left: 5px solid #ef4444;">
+                    <div class="kpi-title">📤 ยอดรวมขายสินค้าทั้งหมด</div>
+                    <div class="kpi-value" style="color: #ef4444;">-{out_sum:,} <span style="font-size: 15px;">ชิ้น</span></div>
+                    <div class="kpi-sub">บันทึกสะสมจากเอกสารยอดขาย</div>
+                </div>
+            """, unsafe_allow_html=True)
 
         st.write("")
 
+        # แผนภูมิวิเคราะห์
         col_g1, col_g2 = st.columns([1.6, 1])
         with col_g1:
             with st.container(border=True):
@@ -612,6 +615,7 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
 
         st.divider()
 
+        # ตารางสรุปภาพรวมรายโซน
         st.markdown("#### 📋 ตารางสรุปภาพรวมแยกตามโซนสินค้า")
         zone_summary_table = df_dash.groupby("โซน").agg(
             จำนวนรายการ_SKU=("รหัสสินค้า", "count"),
@@ -634,65 +638,66 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             type="primary"
         )
+
+        st.divider()
+
+        # ========================================================
+        # 📑 ส่วนแสดงรายงานรับเข้าและขายสินค้าบนแดชบอร์ดโดยตรง
+        # ========================================================
+        st.markdown("### 📑 รายงานประวัติการรับเข้าและยอดขายสินค้า (30 โซน)")
+        st.caption("บันทึกการทำรายการที่ประมวลผลผ่านเอกสารรับเข้าและขายสินค้า")
+
+        if not df_trans.empty:
+            with st.container(border=True):
+                f_c1, f_c2, f_c3 = st.columns(3)
+                with f_c1:
+                    trans_filter = st.selectbox("🔍 กรองประเภทรายการ:", options=["แสดงทั้งหมด", "รับเข้าสินค้า", "ขายสินค้า", "ตั้งต้น Master"], key="dash_trans_filter")
+                with f_c2:
+                    zones_in_log = ["แสดงทุกโซน"] + sorted(list(df_trans["โซน"].dropna().unique()))
+                    zone_filter = st.selectbox("📍 กรองตามโซน:", options=zones_in_log, key="dash_zone_filter")
+                with f_c3:
+                    tags_in_log = ["แสดงทุกแท็ก"] + sorted(list(df_trans["แท็ก {Tag}"].dropna().unique()))
+                    tag_filter = st.selectbox("🏷️ กรองตามแท็ก:", options=tags_in_log, key="dash_tag_filter")
+
+            filtered_trans = df_trans.copy()
+            if trans_filter != "แสดงทั้งหมด":
+                filtered_trans = filtered_trans[filtered_trans["ประเภทธุรกรรม"] == trans_filter]
+            if zone_filter != "แสดงทุกโซน":
+                filtered_trans = filtered_trans[filtered_trans["โซน"] == zone_filter]
+            if tag_filter != "แสดงทุกแท็ก":
+                filtered_trans = filtered_trans[filtered_trans["แท็ก {Tag}"] == tag_filter]
+
+            filtered_trans["จำนวน_num"] = pd.to_numeric(filtered_trans["จำนวน"], errors="coerce").fillna(0)
+            total_items_log = len(filtered_trans)
+            total_qty_log = int(filtered_trans["จำนวน_num"].sum())
+
+            s_c1, s_c2 = st.columns(2)
+            with s_c1:
+                st.metric("📋 จำนวนแถวรายการในประวัติ", f"{total_items_log:,} รายการ")
+            with s_c2:
+                st.metric("🔢 ยอดรวมจำนวนชิ้นตามตัวกรอง", f"{total_qty_log:,} ชิ้น")
+
+            display_trans = filtered_trans.drop(columns=["จำนวน_num"], errors="ignore")
+            st.dataframe(display_trans, use_container_width=True)
+
+            out_trans = io.BytesIO()
+            with pd.ExcelWriter(out_trans, engine="openpyxl") as writer:
+                display_trans.to_excel(writer, sheet_name="Transactions", index=False)
+
+            st.download_button(
+                label="📥 ดาวน์โหลดประวัติรับเข้า-ขายสินค้า (Excel)",
+                data=out_trans.getvalue(),
+                file_name="ประวัติการรับเข้าและขายสินค้า.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_download_trans_dash"
+            )
+        else:
+            st.info("💡 ยังไม่มีประวัติการรับเข้าหรือขายสินค้า เมื่ออัปโหลดเอกสารในโหมด Admin ประวัติจะแสดงที่นี่โดยอัตโนมัติ")
+
     else:
         st.info("💡 ขณะนี้ยังไม่มีข้อมูลในระบบ สามารถล็อกอินโหมด Admin เพื่อเริ่มนำเข้าข้อมูลได้ทันที")
 
-# --- 1. หน้าแสดงรายงานรับเข้า & ขายสินค้า ---
-elif "รายงานรับเข้า & ขายสินค้า" in selected_menu:
-    st.markdown("""
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
-            <h1 style="font-size: 28px; font-weight: 800; margin: 0; color: #0f172a;">📑 รายงานประวัติการรับเข้าและยอดขายสินค้า (30 โซน)</h1>
-        </div>
-        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">ตรวจสอบบันทึกธุรกรรมการนำเข้าและยอดขายสินค้าที่ถูกประมวลผลเข้าระบบ</p>
-    """, unsafe_allow_html=True)
-
-    if not df_trans.empty:
-        f_c1, f_c2, f_c3 = st.columns(3)
-        with f_c1:
-            trans_filter = st.selectbox("กรองประเภทรายการ:", options=["แสดงทั้งหมด", "รับเข้าสินค้า", "ขายสินค้า", "ตั้งต้น Master"])
-        with f_c2:
-            zones_in_log = ["แสดงทุกโซน"] + sorted(list(df_trans["โซน"].dropna().unique()))
-            zone_filter = st.selectbox("กรองตามโซน:", options=zones_in_log)
-        with f_c3:
-            tags_in_log = ["แสดงทุกแท็ก"] + sorted(list(df_trans["แท็ก {Tag}"].dropna().unique()))
-            tag_filter = st.selectbox("กรองตามแท็ก:", options=tags_in_log)
-
-        filtered_trans = df_trans.copy()
-        if trans_filter != "แสดงทั้งหมด":
-            filtered_trans = filtered_trans[filtered_trans["ประเภทธุรกรรม"] == trans_filter]
-        if zone_filter != "แสดงทุกโซน":
-            filtered_trans = filtered_trans[filtered_trans["โซน"] == zone_filter]
-        if tag_filter != "แสดงทุกแท็ก":
-            filtered_trans = filtered_trans[filtered_trans["แท็ก {Tag}"] == tag_filter]
-
-        filtered_trans["จำนวน_num"] = pd.to_numeric(filtered_trans["จำนวน"], errors="coerce").fillna(0)
-        total_items_log = len(filtered_trans)
-        total_qty_log = int(filtered_trans["จำนวน_num"].sum())
-
-        s_c1, s_c2 = st.columns(2)
-        with s_c1:
-            st.metric("📋 จำนวนแถวรายการในประวัติ", f"{total_items_log:,} รายการ")
-        with s_c2:
-            st.metric("🔢 ยอดรวมจำนวนชิ้นตามตัวกรอง", f"{total_qty_log:,} ชิ้น")
-
-        display_trans = filtered_trans.drop(columns=["จำนวน_num"], errors="ignore")
-        st.dataframe(display_trans, use_container_width=True)
-
-        out_trans = io.BytesIO()
-        with pd.ExcelWriter(out_trans, engine="openpyxl") as writer:
-            display_trans.to_excel(writer, sheet_name="Transactions", index=False)
-
-        st.download_button(
-            label="📥 ดาวน์โหลดประวัติรับเข้า-ขายสินค้า (Excel)",
-            data=out_trans.getvalue(),
-            file_name="ประวัติการรับเข้าและขายสินค้า.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary"
-        )
-    else:
-        st.info("💡 ยังไม่มีประวัติการรับเข้าหรือขายสินค้า เมื่ออัปโหลดเอกสารในโหมด Admin ประวัติจะแสดงที่นี่โดยอัตโนมัติ")
-
-# --- 2. หน้าจัดการสินค้า (รายโซน) ---
+# --- 1. หน้าจัดการสินค้า (รายโซน) ---
 elif "จัดการสินค้า" in selected_menu:
     if not df_all.empty and "โซน" in df_all.columns:
         df_zone = df_all[df_all["โซน"] == selected_zone].reset_index(drop=True)
@@ -766,7 +771,7 @@ elif "จัดการสินค้า" in selected_menu:
     else:
         st.info(f"👈 โซน {selected_zone} ยังไม่มีข้อมูล สามารถอัปโหลดไฟล์ที่แถบซ้ายมือได้เลยครับ")
 
-# --- 3. หน้าสินค้าที่มีปัญหา (คงเหลือติดลบ) ---
+# --- 2. หน้าสินค้าที่มีปัญหา (คงเหลือติดลบ) ---
 elif "ติดลบ" in selected_menu:
     st.markdown("## ⚠️ สินค้าที่มีปัญหา (ยอดคงเหลือติดลบ)")
     
@@ -842,7 +847,7 @@ elif "ติดลบ" in selected_menu:
     else:
         st.info("ยังไม่มีข้อมูลในระบบ")
 
-# --- 4. หน้าสินค้าสต็อก 0 ถึง 3000 ---
+# --- 3. หน้าสินค้าสต็อก 0 ถึง 3000 ---
 elif "0 ถึง 3000" in selected_menu:
     st.markdown("""
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
@@ -986,7 +991,7 @@ elif "0 ถึง 3000" in selected_menu:
     else:
         st.info("ยังไม่มีข้อมูลในระบบ")
 
-# --- 5. สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง) ---
+# --- 4. สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง) ---
 elif "สรุปสายงาน" in selected_menu:
     st.markdown("## 📊 ข้อมูลสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)")
     if not df_all.empty and "โซน" in df_all.columns:
@@ -998,7 +1003,7 @@ elif "สรุปสายงาน" in selected_menu:
     else:
         st.info("ยังไม่มีข้อมูลสต็อกสินค้า")
 
-# --- 6. ค้นหาสินค้า & Tag ---
+# --- 5. ค้นหาสินค้า & Tag ---
 elif "ค้นหาสินค้า" in selected_menu:
     st.markdown("## 🔍 ค้นหาสินค้า & แท็กข้ามทุกโซน")
     with st.container(border=True):
