@@ -18,7 +18,7 @@ div[data-testid="stFileUploaderDeleteBtn"] { display: none !important; }
 
 DB_FILE = "database_inventory.csv"
 NO_IMAGE_PLACEHOLDER = "https://placehold.co/400x400/f8fafc/94a3b8?text=No+Image"
-ITEMS_PER_PAGE = 48  # แสดงรอบละ 48 รายการ (12 แถว x แถวละ 4 กล่อง) เพื่อความเร็ว
+ITEMS_PER_PAGE = 48
 
 ALL_ZONES = [
     "AA", "AB", "BB", "CC", "DD", "EE", "FF", "GG", 
@@ -66,8 +66,6 @@ def extract_fields_from_text(text, source_name, target_zone):
 
 def clean_and_prepare_df(raw_df, source_name, target_zone):
     df = raw_df.copy()
-    
-    # 1. ค้นหาและกำหนดคอลัมน์ รหัสสินค้า / รหัสรอง
     for col in df.columns:
         c_str = str(col).strip()
         if "รหัสสินค้า" in c_str or c_str == "รหัส":
@@ -75,16 +73,12 @@ def clean_and_prepare_df(raw_df, source_name, target_zone):
         if "รหัสรอง" in c_str:
             df["รหัสรอง"] = df[col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
-    # 2. ดึงชื่อสินค้า (รองรับหัวตาราง "แท็ก • ชื่อรายการสินค้า" หรือ "ชื่อ")
     name_col = next(
         (c for c in df.columns if "ชื่อรายการสินค้า" in str(c) or "ชื่อ" in str(c) or "รายละ" in str(c)),
         df.columns[2] if len(df.columns) > 2 else df.columns[0]
     )
-    
-    # ตัดแท็ก {..} ออกจากชื่อสินค้า (ถ้ามีติดมา)
     df["ชื่อรายการสินค้า"] = df[name_col].astype(str).apply(lambda x: re.sub(r'\{[^}]+\}', '', x).replace("•", "").strip())
 
-    # 3. จัดการแท็ก {Tag}
     tag_col = next((c for c in df.columns if "แท็ก" in str(c) and "ชื่อ" not in str(c)), None)
     if tag_col:
         df["แท็ก {Tag}"] = df[tag_col].fillna("{ทั่วไป}").astype(str).str.strip()
@@ -94,7 +88,6 @@ def clean_and_prepare_df(raw_df, source_name, target_zone):
             return f"{{{m.group(1).strip()}}}" if m else "{ทั่วไป}"
         df["แท็ก {Tag}"] = df[name_col].astype(str).apply(get_tag)
 
-    # 4. แปลงตัวเลขจำนวนสั่งและคงเหลือ
     for c in df.columns:
         c_str = str(c).strip()
         if "สั่ง" in c_str:
@@ -113,7 +106,7 @@ def clean_and_prepare_df(raw_df, source_name, target_zone):
     return df[existing_cols]
 
 def render_product_cards(items_df, current_zone):
-    cols = st.columns(4)  # จัดแถวละ 4 กล่องสไตล์ TKK Online
+    cols = st.columns(4)
     for idx, row in items_df.iterrows():
         raw_barcode = str(row.get("รหัสสินค้า", "")).replace(".0", "").strip()
         barcode = re.sub(r'[^0-9A-Za-z\-_]', '', raw_barcode)
@@ -128,14 +121,12 @@ def render_product_cards(items_df, current_zone):
         qty = row.get("จำนวนสั่งล่าสุด", 0)
         stock = str(row.get("คงเหลือ", "0")).replace(".0", "")
         
-        # ถอดรหัสรูปภาพและลิงก์
         code_for_img = barcode if (barcode and len(barcode) >= 5) else sub_code
         img_url = f"https://tkkonlineshop.com/images/products/{code_for_img}.jpg"
         web_link = f"https://tkkonlineshop.com/products/{code_for_img}" if code_for_img else "https://tkkonlineshop.com"
         
         with cols[idx % 4]:
             with st.container(border=True):
-                # 1. รูปภาพสินค้า
                 st.markdown(f"""
                 <div style="text-align: center; margin-bottom: 10px;">
                     <a href="{web_link}" target="_blank">
@@ -145,25 +136,15 @@ def render_product_cards(items_df, current_zone):
                              style="width: 100%; aspect-ratio: 1/1; object-fit: contain; border-radius: 12px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.08);" />
                     </a>
                 </div>
-                """, unsafe_allow_html=True)
-                
-                # 2. ชื่อสินค้าตรงกลาง
-                st.markdown(f"""
                 <div style="text-align: center; height: 44px; overflow: hidden; font-size: 13px; font-weight: 600; color: #1e293b; line-height: 1.4; margin-bottom: 6px;">
                     • {name}
                 </div>
-                """, unsafe_allow_html=True)
-                
-                # 3. รหัสสินค้า, รหัสรอง, ยอดคงเหลือ
-                st.markdown(f"""
                 <div style="text-align: center; font-size: 11px; color: #64748b; line-height: 1.6; margin-bottom: 8px;">
                     <div>รหัสสินค้า: <span style="color: #334155;">{barcode if barcode else '-'}</span></div>
                     <div>รหัสรอง: <b style="color: #2563eb;">{sub_code if sub_code else '-'}</b></div>
                     <div>จำนวนคงเหลือ : <b style="color: {'#dc2626' if '-' in stock else '#059669'};">{stock}</b></div>
                 </div>
                 """, unsafe_allow_html=True)
-                
-                # 4. ปุ่มรายละเอียด / ใส่ตะกร้า
                 st.link_button("🛒 รายละเอียด / ใส่ตะกร้า", web_link, use_container_width=True)
 
 if "current_df" not in st.session_state:
@@ -176,11 +157,19 @@ with st.sidebar:
     st.title("📦 การจัดการสต็อก")
     
     st.markdown("##### 🧭 ฟังก์ชันการทำงาน")
-    st.caption("⚪ ช่องจำลองใบเสร็จสินค้า")
-    st.markdown("🔴 **จัดการสินค้า (รายโซน)**")
-    st.caption("⚠️ สินค้าที่มีปัญหา (คงเหลือติดลบ)")
-    st.caption("📊 ข้อมูลสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)")
-    st.caption("🔍 ค้นหาสินค้า & แท็ก")
+    # เปลี่ยนเป็น radio button ให้สามารถคลิกสลับฟังก์ชันได้จริง
+    selected_menu = st.radio(
+        "เลือกฟังก์ชัน:",
+        options=[
+            "จัดการสินค้า (รายโซน)",
+            "สินค้าที่มีปัญหา (คงเหลือติดลบ)",
+            "สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)",
+            "ค้นหาสินค้า & Tag",
+            "ช่องจำลองใบเสร็จสินค้า"
+        ],
+        index=0,
+        label_visibility="collapsed"
+    )
     
     st.divider()
     st.markdown("##### 📍 โซนสินค้า (30 โซน)")
@@ -247,79 +236,132 @@ with st.sidebar:
                     st.success("ลบข้อมูลสำเร็จ")
                     st.rerun()
 
-# --- หน้าแดชบอร์ดหลัก ---
 df_all = st.session_state.current_df
-if not df_all.empty and "โซน" in df_all.columns:
-    df_zone = df_all[df_all["โซน"] == selected_zone].reset_index(drop=True)
-else:
-    df_zone = pd.DataFrame()
 
-# แถบสถิติ 4 คอลัมน์ด้านบน
-top_c1, top_c2, top_c3, top_c4 = st.columns(4)
-with top_c1:
-    st.subheader(f"โซน {selected_zone}")
-with top_c2:
-    st.subheader("รวมทุกแท็ก")
-with top_c3:
-    st.subheader("ทั้งหมด")
-with top_c4:
-    total_items = len(df_zone)
-    st.subheader(f"{total_items:,} รายการ")
-
-st.divider()
-
-if not df_zone.empty:
-    unique_tags = sorted(list(df_zone["แท็ก {Tag}"].dropna().unique()))
-    selected_tag = st.selectbox("🔍 เลือกกลุ่มแท็กเพื่อดูสินค้า:", options=["แสดงทุกกลุ่มแท็ก"] + unique_tags)
-    
-    # กรองข้อมูลตามแท็ก
-    if selected_tag == "แสดงทุกกลุ่มแท็ก":
-        active_items_df = df_zone.copy()
+# --- 1. หน้าจัดการสินค้า (รายโซน) ---
+if selected_menu == "จัดการสินค้า (รายโซน)":
+    if not df_all.empty and "โซน" in df_all.columns:
+        df_zone = df_all[df_all["โซน"] == selected_zone].reset_index(drop=True)
     else:
-        active_items_df = df_zone[df_zone["แท็ก {Tag}"] == selected_tag].reset_index(drop=True)
-    
-    total_count = len(active_items_df)
-    total_pages = max(1, math.ceil(total_count / ITEMS_PER_PAGE))
-    
-    # ควบคุมหน้า (Pagination)
-    p_col1, p_col2 = st.columns([3, 1])
-    with p_col1:
-        st.markdown(f"📦 จำนวนสินค้าที่แสดง: **{total_count:,}** รายการ")
-    with p_col2:
-        current_page = st.number_input(f"หน้าแสดงผล (จาก {total_pages} หน้า):", min_value=1, max_value=total_pages, value=1, step=1)
-    
-    start_idx = (current_page - 1) * ITEMS_PER_PAGE
-    end_idx = start_idx + ITEMS_PER_PAGE
-    page_df = active_items_df.iloc[start_idx:end_idx].reset_index(drop=True)
-    
-    # แสดงการ์ดสินค้า 4 คอลัมน์
-    with st.container():
-        render_product_cards(page_df, selected_zone)
+        df_zone = pd.DataFrame()
+
+    top_c1, top_c2, top_c3, top_c4 = st.columns(4)
+    with top_c1:
+        st.subheader(f"โซน {selected_zone}")
+    with top_c2:
+        st.subheader("รวมทุกแท็ก")
+    with top_c3:
+        st.subheader("ทั้งหมด")
+    with top_c4:
+        total_items = len(df_zone)
+        st.subheader(f"{total_items:,} รายการ")
 
     st.divider()
 
-    # ตารางข้อมูลและดาวน์โหลด Excel
-    if selected_tag == "แสดงทุกกลุ่มแท็ก":
-        table_title = f"📋 ตารางข้อมูลทั้งหมด [โซน {selected_zone}]"
-        file_suffix = f"โซน_{selected_zone}_ทั้งหมด"
+    if not df_zone.empty:
+        unique_tags = sorted(list(df_zone["แท็ก {Tag}"].dropna().unique()))
+        selected_tag = st.selectbox("🔍 เลือกกลุ่มแท็กเพื่อดูสินค้า:", options=["แสดงทุกกลุ่มแท็ก"] + unique_tags)
+        
+        if selected_tag == "แสดงทุกกลุ่มแท็ก":
+            active_items_df = df_zone.copy()
+        else:
+            active_items_df = df_zone[df_zone["แท็ก {Tag}"] == selected_tag].reset_index(drop=True)
+        
+        total_count = len(active_items_df)
+        total_pages = max(1, math.ceil(total_count / ITEMS_PER_PAGE))
+        
+        p_col1, p_col2 = st.columns([3, 1])
+        with p_col1:
+            st.markdown(f"📦 จำนวนสินค้าที่แสดง: **{total_count:,}** รายการ")
+        with p_col2:
+            current_page = st.number_input(f"หน้าแสดงผล (จาก {total_pages} หน้า):", min_value=1, max_value=total_pages, value=1, step=1)
+        
+        start_idx = (current_page - 1) * ITEMS_PER_PAGE
+        end_idx = start_idx + ITEMS_PER_PAGE
+        page_df = active_items_df.iloc[start_idx:end_idx].reset_index(drop=True)
+        
+        with st.container():
+            render_product_cards(page_df, selected_zone)
+
+        st.divider()
+
+        if selected_tag == "แสดงทุกกลุ่มแท็ก":
+            table_title = f"📋 ตารางข้อมูลทั้งหมด [โซน {selected_zone}]"
+            file_suffix = f"โซน_{selected_zone}_ทั้งหมด"
+        else:
+            clean_tag_name = re.sub(r'[\{\}]', '', selected_tag)
+            table_title = f"📋 ตารางข้อมูลแท็ก {selected_tag} [โซน {selected_zone}]"
+            file_suffix = f"โซน_{selected_zone}_แท็ก_{clean_tag_name}"
+
+        st.subheader(table_title)
+        display_df = active_items_df.drop(columns=["ชื่อไฟล์ที่มา"], errors="ignore")
+        st.dataframe(display_df, use_container_width=True)
+
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            display_df.to_excel(writer, sheet_name=f"Zone_{selected_zone}"[:31], index=False)
+        
+        st.download_button(
+            label=f"📥 ดาวน์โหลด Excel โซน {selected_zone}",
+            data=output.getvalue(),
+            file_name=f"ข้อมูล_{file_suffix}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     else:
-        clean_tag_name = re.sub(r'[\{\}]', '', selected_tag)
-        table_title = f"📋 ตารางข้อมูลแท็ก {selected_tag} [โซน {selected_zone}]"
-        file_suffix = f"โซน_{selected_zone}_แท็ก_{clean_tag_name}"
+        st.info(f"👈 โซน {selected_zone} ยังไม่มีข้อมูล สามารถอัปโหลดไฟล์ที่แถบซ้ายมือได้เลยครับ")
 
-    st.subheader(table_title)
-    display_df = active_items_df.drop(columns=["ชื่อไฟล์ที่มา"], errors="ignore")
-    st.dataframe(display_df, use_container_width=True)
+# --- 2. หน้าสินค้าที่มีปัญหา (คงเหลือติดลบ) ---
+elif selected_menu == "สินค้าที่มีปัญหา (คงเหลือติดลบ)":
+    st.title("⚠️ สินค้าที่มีปัญหา (ยอดคงเหลือติดลบ)")
+    if not df_all.empty and "คงเหลือ" in df_all.columns:
+        neg_mask = df_all["คงเหลือ"].astype(str).str.contains("-", na=False)
+        df_negative = df_all[neg_mask].reset_index(drop=True)
+        
+        if not df_negative.empty:
+            st.error(f"ตรวจพบสินค้าติดลบทั้งหมด {len(df_negative):,} รายการทั่วทั้งระบบ")
+            render_product_cards(df_negative.head(ITEMS_PER_PAGE), "สินค้าติดลบ")
+            st.divider()
+            st.dataframe(df_negative, use_container_width=True)
+        else:
+            st.success("🎉 เยี่ยมมาก! ไม่พบสินค้าที่มียอดคงเหลือติดลบในระบบ")
+    else:
+        st.info("ยังไม่มีข้อมูลในระบบ")
 
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        display_df.to_excel(writer, sheet_name=f"Zone_{selected_zone}"[:31], index=False)
-    
-    st.download_button(
-        label=f"📥 ดาวน์โหลด Excel โซน {selected_zone}",
-        data=output.getvalue(),
-        file_name=f"ข้อมูล_{file_suffix}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-else:
-    st.info(f"👈 โซน {selected_zone} ยังไม่มีข้อมูล สามารถอัปโหลดไฟล์ที่แถบซ้ายมือได้เลยครับ")
+# --- 3. สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง) ---
+elif selected_menu == "สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)":
+    st.title("📊 ข้อมูลสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)")
+    if not df_all.empty and "โซน" in df_all.columns:
+        zone_summary = df_all.groupby("โซน").size().reset_index(name="จำนวนสินค้าทั้งหมด")
+        st.dataframe(zone_summary, use_container_width=True)
+        st.bar_chart(zone_summary.set_index("โซน"))
+    else:
+        st.info("ยังไม่มีข้อมูลสต็อกสินค้า")
+
+# --- 4. ค้นหาสินค้า & Tag ---
+elif selected_menu == "ค้นหาสินค้า & Tag":
+    st.title("🔍 ค้นหาสินค้า & แท็กข้ามทุกโซน")
+    keyword = st.text_input("พิมพ์รหัสสินค้า, รหัสรอง, หรือชื่อสินค้าที่ต้องการค้นหา:")
+    if keyword and not df_all.empty:
+        kw = keyword.strip().lower()
+        search_cols = ["รหัสสินค้า", "รหัสรอง", "ชื่อรายการสินค้า", "แท็ก {Tag}"]
+        cond = False
+        for c in search_cols:
+            if c in df_all.columns:
+                cond = cond | df_all[c].astype(str).str.lower().str.contains(kw, na=False)
+        res_df = df_all[cond].reset_index(drop=True)
+        st.info(f"ผลการค้นหา: พบ {len(res_df):,} รายการ")
+        render_product_cards(res_df.head(ITEMS_PER_PAGE), "ค้นหา")
+        st.dataframe(res_df, use_container_width=True)
+
+# --- 5. ช่องจำลองใบเสร็จสินค้า ---
+elif selected_menu == "ช่องจำลองใบเสร็จสินค้า":
+    st.title("⚪ ช่องจำลองใบเสร็จสินค้า (Receipt Preview)")
+    st.caption("ระบบจำลองการสร้างบิล/ใบเสร็จจากข้อมูลรายการสั่งซื้อล่าสุด")
+    if not df_all.empty and "จำนวนสั่งล่าสุด" in df_all.columns:
+        ordered_items = df_all[pd.to_numeric(df_all["จำนวนสั่งล่าสุด"], errors="coerce") > 0].reset_index(drop=True)
+        if not ordered_items.empty:
+            st.dataframe(ordered_items[["รหัสสินค้า", "รหัสรอง", "ชื่อรายการสินค้า", "จำนวนสั่งล่าสุด", "โซน"]], use_container_width=True)
+        else:
+            st.info("ไม่พบรายการที่มีประวัติสั่งซื้อล่าสุด (> 0)")
+    else:
+        st.info("ยังไม่มีข้อมูลรายการสั่งซื้อในระบบ")
