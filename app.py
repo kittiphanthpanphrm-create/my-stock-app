@@ -6,12 +6,97 @@ import pandas as pd
 from pypdf import PdfReader
 import streamlit as st
 
-st.set_page_config(page_title="TKK ERP - จัดการคลังและโซนสินค้า", layout="wide")
+st.set_page_config(
+    page_title="TKK ERP - จัดการคลังและโซนสินค้า", 
+    page_icon="📦",
+    layout="wide"
+)
+
+# ==========================================
+# 🎨 ตกแต่ง CSS เพื่อความสวยงาม กรอบโค้งมน และตัวหนังสือเด่นชัด
+# ==========================================
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Sarabun', sans-serif;
+    }
+    
+    /* ซ่อนปุ่มลบไฟล์เดิม */
+    button[aria-label="Delete"] { display: none !important; }
+    div[data-testid="stFileUploaderDeleteBtn"] { display: none !important; }
+    
+    /* การ์ดสถิติ KPI Cards แบบพรีเมียม */
+    .kpi-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        border-radius: 14px;
+        padding: 18px 22px;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+        border: 1px solid #e2e8f0;
+        text-align: left;
+        margin-bottom: 12px;
+    }
+    .kpi-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #64748b;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .kpi-value {
+        font-size: 30px;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+    .kpi-sub {
+        font-size: 12px;
+        color: #94a3b8;
+        margin-top: 4px;
+    }
+    
+    /* กล่องควบคุมตัวกรอง (Filter Box) */
+    .filter-panel {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 16px 20px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+        margin-bottom: 20px;
+    }
+    
+    /* กรอบล้อมรอบแผนภูมิ (Chart Box) */
+    .chart-box {
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 18px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.04);
+        height: 100%;
+    }
+    
+    /* สไตล์ตัวเลขคงเหลือในการ์ดสินค้า */
+    .metric-number {
+        font-size: 24px;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 2px 0 4px 0;
+    }
+    .metric-number-neg {
+        font-size: 24px;
+        font-weight: 700;
+        color: #ef4444;
+        margin: 2px 0 4px 0;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # ==========================================
 # 🔑 กำหนดรหัสผ่านสำหรับเข้าใช้งานระบบ
 # ==========================================
-APP_PASSWORD = "1234"  # <-- เปลี่ยนรหัสผ่านที่ต้องการตรงนี้
+APP_PASSWORD = "1234"  # <-- เปลี่ยนรหัสผ่านตรงนี้ได้
 
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
@@ -23,9 +108,9 @@ def check_password():
         with col2:
             with st.container(border=True):
                 st.markdown("<h2 style='text-align: center;'>🔒 เข้าสู่ระบบ</h2>", unsafe_allow_html=True)
-                st.caption("ระบบจัดการคลังและโซนสินค้า TKK ERP")
+                st.caption("<div style='text-align: center; margin-bottom: 12px;'>ระบบจัดการคลังและโซนสินค้า TKK ERP</div>", unsafe_allow_html=True)
                 pwd = st.text_input("กรุณากรอกรหัสผ่าน (Password):", type="password")
-                if st.button("เข้าสู่ระบบ", type="primary", use_container_width=True):
+                if st.button("เข้าสู่ระบบ 🚀", type="primary", use_container_width=True):
                     if pwd == APP_PASSWORD:
                         st.session_state.authenticated = True
                         st.rerun()
@@ -38,17 +123,8 @@ if not check_password():
     st.stop()
 
 # ==========================================
-# 🚀 เริ่มการทำงานของระบบหลัก
+# 🚀 ตัวแปรและฟังก์ชันระบบคลังสินค้า
 # ==========================================
-
-# ซ่อนปุ่มกากบาทของ uploader
-st.markdown("""
-<style>
-button[aria-label="Delete"] { display: none !important; }
-div[data-testid="stFileUploaderDeleteBtn"] { display: none !important; }
-</style>
-""", unsafe_allow_html=True)
-
 DB_FILE = "database_inventory.csv"
 NO_IMAGE_PLACEHOLDER = "https://placehold.co/400x400/f8fafc/94a3b8?text=No+Image"
 ITEMS_PER_PAGE = 48
@@ -163,15 +239,15 @@ def render_product_cards(items_df, current_zone):
                     <img src="{img_url}" 
                          onerror="this.onerror=null; this.src='{NO_IMAGE_PLACEHOLDER}';" 
                          loading="lazy"
-                         style="width: 100%; aspect-ratio: 1/1; object-fit: contain; border-radius: 12px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.08);" />
+                         style="width: 100%; aspect-ratio: 1/1; object-fit: contain; border-radius: 12px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.06);" />
                 </div>
                 <div style="text-align: center; height: 44px; overflow: hidden; font-size: 13px; font-weight: 600; color: #1e293b; line-height: 1.4; margin-bottom: 6px;">
                     • {name}
                 </div>
-                <div style="text-align: center; font-size: 11px; color: #64748b; line-height: 1.6; margin-bottom: 6px;">
-                    <div>รหัสสินค้า: <span style="color: #334155;">{barcode if barcode else '-'}</span></div>
+                <div style="text-align: center; font-size: 12px; color: #64748b; line-height: 1.6; margin-bottom: 6px;">
+                    <div>รหัสสินค้า: <span style="color: #334155; font-weight: 600;">{barcode if barcode else '-'}</span></div>
                     <div>รหัสรอง: <b style="color: #2563eb;">{sub_code if sub_code else '-'}</b></div>
-                    <div>จำนวนคงเหลือ : <b style="color: {'#dc2626' if ('-' in stock or stock == '0') else '#059669'};">{stock}</b></div>
+                    <div>คงเหลือ : <b style="font-size: 14px; color: {'#dc2626' if ('-' in stock or stock == '0') else '#059669'};">{stock}</b></div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -182,14 +258,14 @@ if "uploader_key" not in st.session_state:
 
 # --- เมนูด้านข้าง (Sidebar) ---
 with st.sidebar:
-    st.title("📦 การจัดการสต็อก")
+    st.markdown("## 📦 การจัดการสต็อก")
     
     if st.button("🚪 ออกจากระบบ (Logout)", use_container_width=True):
         st.session_state.authenticated = False
         st.rerun()
         
     st.divider()
-    st.markdown("##### 🧭 ฟังก์ชันการทำงาน")
+    st.markdown("##### 🧭 เมนูเลือกฟังก์ชัน")
     selected_menu = st.radio(
         "เลือกฟังก์ชัน:",
         options=[
@@ -199,7 +275,7 @@ with st.sidebar:
             "สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)",
             "ค้นหาสินค้า & Tag"
         ],
-        index=0,
+        index=2, # ให้เปิดมาที่แดชบอร์ด 0-3000 ได้ทันที
         label_visibility="collapsed"
     )
     
@@ -277,16 +353,18 @@ if selected_menu == "จัดการสินค้า (รายโซน)":
     else:
         df_zone = pd.DataFrame()
 
+    st.markdown(f"## 📍 รายการสต็อกสินค้า [โซน {selected_zone}]")
+
     top_c1, top_c2, top_c3, top_c4 = st.columns(4)
     with top_c1:
-        st.subheader(f"โซน {selected_zone}")
+        st.markdown(f"""<div class="kpi-card"><div class="kpi-title">📌 รหัสโซน</div><div class="kpi-value" style="color:#2563eb;">{selected_zone}</div></div>""", unsafe_allow_html=True)
     with top_c2:
-        st.subheader("รวมทุกแท็ก")
+        st.markdown(f"""<div class="kpi-card"><div class="kpi-title">🏷️ กลุ่มแท็ก</div><div class="kpi-value" style="color:#0f172a;">รวมทุกแท็ก</div></div>""", unsafe_allow_html=True)
     with top_c3:
-        st.subheader("ทั้งหมด")
+        st.markdown(f"""<div class="kpi-card"><div class="kpi-title">📊 สถานะ</div><div class="kpi-value" style="color:#059669;">ทั้งหมด</div></div>""", unsafe_allow_html=True)
     with top_c4:
         total_items = len(df_zone)
-        st.subheader(f"{total_items:,} รายการ")
+        st.markdown(f"""<div class="kpi-card"><div class="kpi-title">📦 จำนวนรวม</div><div class="kpi-value" style="color:#ea580c;">{total_items:,} <span style="font-size:16px;">รายการ</span></div></div>""", unsafe_allow_html=True)
 
     st.divider()
 
@@ -344,14 +422,14 @@ if selected_menu == "จัดการสินค้า (รายโซน)":
 
 # --- 2. หน้าสินค้าที่มีปัญหา (คงเหลือติดลบ) ---
 elif selected_menu == "สินค้าที่มีปัญหา (คงเหลือติดลบ)":
-    st.title("⚠️ สินค้าที่มีปัญหา (ยอดคงเหลือติดลบ)")
+    st.markdown("## ⚠️ สินค้าที่มีปัญหา (ยอดคงเหลือติดลบ)")
     
     if not df_all.empty and "คงเหลือ" in df_all.columns:
         stock_series = pd.to_numeric(df_all["คงเหลือ"], errors="coerce")
         df_negative = df_all[stock_series < 0].reset_index(drop=True)
         
         if not df_negative.empty:
-            st.error(f"ตรวจพบสินค้าติดลบทั้งหมด {len(df_negative):,} รายการทั่วทั้งระบบ")
+            st.error(f"🚨 ตรวจพบสินค้าติดลบทั้งหมด {len(df_negative):,} รายการทั่วทั้งระบบ")
             
             unique_neg_tags = sorted(list(df_negative["แท็ก {Tag}"].dropna().unique()))
             selected_neg_tag = st.selectbox(
@@ -369,7 +447,7 @@ elif selected_menu == "สินค้าที่มีปัญหา (คง�
                 report_title = f"รายงานสินค้าติดลบ แท็ก {selected_neg_tag}"
                 file_name_suffix = f"แท็ก_{clean_tag}"
 
-            st.subheader(f"📋 ตารางข้อมูล: {report_title} ({len(active_neg_df):,} รายการ)")
+            st.markdown(f"#### 📋 ตารางข้อมูล: {report_title} ({len(active_neg_df):,} รายการ)")
             display_neg_df = active_neg_df.drop(columns=["ชื่อไฟล์ที่มา"], errors="ignore")
             
             output_neg = io.BytesIO()
@@ -414,62 +492,95 @@ elif selected_menu == "สินค้าที่มีปัญหา (คง�
             with st.container():
                 render_product_cards(page_neg_df, "สินค้าติดลบ")
         else:
-            st.success("🎉 ไม่พบสินค้าที่มียอดคงเหลือติดลบในระบบ")
+            st.success("🎉 ยอดเยี่ยมมาก! ไม่พบสินค้าที่มียอดคงเหลือติดลบในระบบ")
     else:
         st.info("ยังไม่มีข้อมูลในระบบ")
 
-# --- 3. หน้าสินค้าสต็อก 0 ถึง 3000 ---
+# --- 3. หน้าสินค้าสต็อก 0 ถึง 3000 (เพิ่มดีไซน์สวยงามและกรอบ) ---
 elif selected_menu == "สต็อกสินค้า 0 ถึง 3000":
-    st.title("📊 แดชบอร์ดวิเคราะห์และรายงานสินค้าสต็อก (0 ถึง 3,000)")
+    st.markdown("""
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <h1 style="font-size: 28px; font-weight: 700; margin: 0; color: #0f172a;">📊 แดชบอร์ดวิเคราะห์และรายงานสต็อก (0 ถึง 3,000)</h1>
+        </div>
+        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">ระบบวิเคราะห์การกระจายตัวของระดับสต็อก กรองกลุ่มแท็ก และดาวน์โหลดตารางข้อมูลรายงานอัตโนมัติ</p>
+    """, unsafe_allow_html=True)
     
     if not df_all.empty and "คงเหลือ" in df_all.columns:
         df_work = df_all.copy()
         df_work["คงเหลือ_ตัวเลข"] = pd.to_numeric(df_work["คงเหลือ"], errors="coerce")
         
-        st.markdown("##### 🎚️ เลือกช่วงจำนวนคงเหลือที่ต้องการตรวจสอบ")
-        stock_range = st.slider(
-            "กำหนดช่วงยอดคงเหลือ:",
-            min_value=0,
-            max_value=3000,
-            value=(0, 3000),
-            step=10,
-            help="เลื่อนแถบซ้าย-ขวาเพื่อดูเฉพาะช่วงสต็อกที่สนใจได้ทันที"
-        )
+        # 1. กล่องเลือกช่วงข้อมูล (Slider Frame)
+        with st.container(border=True):
+            st.markdown("##### 🎚️ ปรับแถบเลื่อนเพื่อระบุช่วงจำนวนสต็อกที่ต้องการ")
+            stock_range = st.slider(
+                "กำหนดช่วงยอดคงเหลือ:",
+                min_value=0,
+                max_value=3000,
+                value=(0, 3000),
+                step=10,
+                help="เลื่อนแถบเพื่อวิเคราะห์เฉพาะกลุ่มสต็อกที่ต้องการ"
+            )
         min_stock, max_stock = stock_range
         
         range_mask = (df_work["คงเหลือ_ตัวเลข"] >= min_stock) & (df_work["คงเหลือ_ตัวเลข"] <= max_stock)
         df_range = df_work[range_mask].reset_index(drop=True)
         
         if not df_range.empty:
+            # 2. การ์ดสถิติแบบพรีเมียม (KPI Cards)
+            total_qty = int(df_range["คงเหลือ_ตัวเลข"].sum())
+            avg_stock = df_range["คงเหลือ_ตัวเลข"].mean()
+
             kpi1, kpi2, kpi3 = st.columns(3)
             with kpi1:
-                st.metric("📦 จำนวนรายการสินค้า", f"{len(df_range):,} รายการ")
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-title">📋 จำนวนรายการสินค้า</div>
+                    <div class="kpi-value" style="color: #2563eb;">{len(df_range):,}</div>
+                    <div class="kpi-sub">รายการที่อยู่ในเกณฑ์ที่เลือก</div>
+                </div>
+                """, unsafe_allow_html=True)
             with kpi2:
-                total_qty = int(df_range["คงเหลือ_ตัวเลข"].sum())
-                st.metric("🔢 ยอดรวมสินค้าทั้งหมด", f"{total_qty:,} ชิ้น")
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-title">🔢 ยอดรวมชิ้นสินค้าคงคลัง</div>
+                    <div class="kpi-value" style="color: #059669;">{total_qty:,}</div>
+                    <div class="kpi-sub">ชิ้นทั้งหมดในระบบ</div>
+                </div>
+                """, unsafe_allow_html=True)
             with kpi3:
-                avg_stock = df_range["คงเหลือ_ตัวเลข"].mean()
-                st.metric("📈 สต็อกเฉลี่ยต่อรายการ", f"{avg_stock:.1f} ชิ้น")
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-title">📈 สต็อกเฉลี่ยต่อรายการ</div>
+                    <div class="kpi-value" style="color: #d97706;">{avg_stock:.1f}</div>
+                    <div class="kpi-sub">ชิ้น / รายการสินค้า</div>
+                </div>
+                """, unsafe_allow_html=True)
 
+            st.write("")
+
+            # 3. แผนภูมิแท่งในกรอบมนสวยงาม
             chart_col1, chart_col2 = st.columns(2)
             with chart_col1:
-                st.markdown("###### 📊 การกระจายตัวตามระดับสต็อก")
-                bins = [-1, 0, 50, 200, 500, 1000, 3000]
-                labels = ["0 (หมดสต็อก)", "1-50 (สต็อกต่ำ)", "51-200", "201-500", "501-1,000", "1,001-3,000"]
-                df_range["กลุ่มสต็อก"] = pd.cut(df_range["คงเหลือ_ตัวเลข"], bins=bins, labels=labels)
-                dist_chart = df_range["กลุ่มสต็อก"].value_counts().sort_index()
-                st.bar_chart(dist_chart, color="#3b82f6")
+                with st.container(border=True):
+                    st.markdown("##### 📊 การกระจายตัวตามระดับสต็อก")
+                    bins = [-1, 0, 50, 200, 500, 1000, 3000]
+                    labels = ["0 (หมดสต็อก)", "1-50 (สต็อกต่ำ)", "51-200", "201-500", "501-1,000", "1,001-3,000"]
+                    df_range["กลุ่มสต็อก"] = pd.cut(df_range["คงเหลือ_ตัวเลข"], bins=bins, labels=labels)
+                    dist_chart = df_range["กลุ่มสต็อก"].value_counts().sort_index()
+                    st.bar_chart(dist_chart, color="#3b82f6")
 
             with chart_col2:
-                st.markdown("###### 🏷️ 10 อันดับแท็กที่มีสินค้ามากที่สุด")
-                top_tags = df_range["แท็ก {Tag}"].value_counts().head(10)
-                st.bar_chart(top_tags, color="#10b981")
+                with st.container(border=True):
+                    st.markdown("##### 🏷️ 10 อันดับแท็กที่มีสินค้ามากที่สุด")
+                    top_tags = df_range["แท็ก {Tag}"].value_counts().head(10)
+                    st.bar_chart(top_tags, color="#10b981")
 
             st.divider()
 
+            # 4. กล่องเลือกกรองตาม Tag
             unique_range_tags = sorted(list(df_range["แท็ก {Tag}"].dropna().unique()))
             selected_range_tag = st.selectbox(
-                "🏷️ กรองดูรายละเอียดตามกลุ่มแท็ก:", 
+                "🏷️ กรองดูรายละเอียดตามกลุ่มแท็กสินค้า:", 
                 options=["แสดงทุกกลุ่มแท็ก"] + unique_range_tags,
                 key="select_range_tag"
             )
@@ -484,7 +595,8 @@ elif selected_menu == "สต็อกสินค้า 0 ถึง 3000":
                 range_report_title = f"รายงานสต็อก_{min_stock}_ถึง_{max_stock}_แท็ก_{selected_range_tag}"
                 range_file_suffix = f"{min_stock}_{max_stock}_แท็ก_{clean_tag}"
 
-            st.subheader(f"📋 {range_report_title.replace('_', ' ')} ({len(active_range_df):,} รายการ)")
+            # 5. ตารางข้อมูลและปุ่มดาวน์โหลดรายงาน Excel
+            st.markdown(f"#### 📋 {range_report_title.replace('_', ' ')} ({len(active_range_df):,} รายการ)")
             display_range_df = active_range_df.drop(columns=["ชื่อไฟล์ที่มา", "คงเหลือ_ตัวเลข", "กลุ่มสต็อก"], errors="ignore")
             
             output_range = io.BytesIO()
@@ -493,7 +605,7 @@ elif selected_menu == "สต็อกสินค้า 0 ถึง 3000":
                 display_range_df.to_excel(writer, sheet_name=clean_sheet, index=False)
             
             st.download_button(
-                label=f"📥 ดาวน์โหลด Excel ({range_report_title.replace('_', ' ')})",
+                label=f"📥 ดาวน์โหลดไฟล์ Excel ({range_report_title.replace('_', ' ')})",
                 data=output_range.getvalue(),
                 file_name=f"{range_report_title}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -505,7 +617,8 @@ elif selected_menu == "สต็อกสินค้า 0 ถึง 3000":
 
             st.divider()
 
-            st.markdown(f"##### 🖼️ การ์ดรายการสินค้า (สต็อกช่วง {min_stock} ถึง {max_stock})")
+            # 6. แสดงการ์ดรูปภาพสินค้า
+            st.markdown(f"##### 🖼️ รายการการ์ดสินค้า (สต็อกช่วง {min_stock} ถึง {max_stock})")
             total_range_count = len(active_range_df)
             total_range_pages = max(1, math.ceil(total_range_count / ITEMS_PER_PAGE))
             
@@ -535,18 +648,21 @@ elif selected_menu == "สต็อกสินค้า 0 ถึง 3000":
 
 # --- 4. สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง) ---
 elif selected_menu == "สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)":
-    st.title("📊 ข้อมูลสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)")
+    st.markdown("## 📊 ข้อมูลสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)")
     if not df_all.empty and "โซน" in df_all.columns:
         zone_summary = df_all.groupby("โซน").size().reset_index(name="จำนวนสินค้าทั้งหมด")
-        st.dataframe(zone_summary, use_container_width=True)
-        st.bar_chart(zone_summary.set_index("โซน"))
+        with st.container(border=True):
+            st.dataframe(zone_summary, use_container_width=True)
+        with st.container(border=True):
+            st.bar_chart(zone_summary.set_index("โซน"), color="#6366f1")
     else:
         st.info("ยังไม่มีข้อมูลสต็อกสินค้า")
 
 # --- 5. ค้นหาสินค้า & Tag ---
 elif selected_menu == "ค้นหาสินค้า & Tag":
-    st.title("🔍 ค้นหาสินค้า & แท็กข้ามทุกโซน")
-    keyword = st.text_input("พิมพ์รหัสสินค้า, รหัสรอง, หรือชื่อสินค้าที่ต้องการค้นหา:")
+    st.markdown("## 🔍 ค้นหาสินค้า & แท็กข้ามทุกโซน")
+    with st.container(border=True):
+        keyword = st.text_input("พิมพ์รหัสสินค้า, รหัสรอง, หรือชื่อสินค้าที่ต้องการค้นหา:")
     if keyword and not df_all.empty:
         kw = keyword.strip().lower()
         search_cols = ["รหัสสินค้า", "รหัสรอง", "ชื่อรายการสินค้า", "แท็ก {Tag}"]
