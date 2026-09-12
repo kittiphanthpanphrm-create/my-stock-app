@@ -13,7 +13,40 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🎨 ตกแต่ง CSS เพื่อความสวยงาม เมนูกด และแดชบอร์ด
+# 🔑 กำหนดรหัสผ่าน
+# ==========================================
+APP_PASSWORD = "1234"         # รหัสผ่านสำหรับเข้าใช้งานระบบทั่วไป
+ADMIN_PASSWORD = "admin8888"   # รหัสผ่านสำหรับปลดล็อกช่องอัปโหลดไฟล์ (แก้ไขได้ตามต้องการ)
+
+# ตรวจสอบการเข้าสู่ระบบทั่วไป
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "admin_authenticated" not in st.session_state:
+    st.session_state.admin_authenticated = False
+
+def check_password():
+    if not st.session_state.authenticated:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 1.2, 1])
+        with col2:
+            with st.container(border=True):
+                st.markdown("<h2 style='text-align: center;'>🔒 เข้าสู่ระบบ</h2>", unsafe_allow_html=True)
+                st.caption("<div style='text-align: center; margin-bottom: 12px;'>ระบบจัดการคลังและโซนสินค้า TKK ERP</div>", unsafe_allow_html=True)
+                pwd = st.text_input("กรุณากรอกรหัสผ่าน (Password):", type="password")
+                if st.button("เข้าสู่ระบบ 🚀", type="primary", use_container_width=True):
+                    if pwd == APP_PASSWORD:
+                        st.session_state.authenticated = True
+                        st.rerun()
+                    else:
+                        st.error("❌ รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง")
+        return False
+    return True
+
+if not check_password():
+    st.stop()
+
+# ==========================================
+# 🎨 ตกแต่ง CSS
 # ==========================================
 st.markdown("""
 <style>
@@ -23,11 +56,9 @@ st.markdown("""
         font-family: 'Sarabun', sans-serif;
     }
     
-    /* ซ่อนปุ่มลบไฟล์เดิม */
     button[aria-label="Delete"] { display: none !important; }
     div[data-testid="stFileUploaderDeleteBtn"] { display: none !important; }
 
-    /* --- ตกแต่งกล่องเลือกเมนูฟังก์ชันใน Sidebar สไตล์ Card Button --- */
     div[data-testid="stRadio"] > div {
         gap: 10px !important;
     }
@@ -56,7 +87,6 @@ st.markdown("""
         font-weight: 700 !important;
     }
     
-    /* การ์ดสถิติ KPI Cards */
     .kpi-card {
         background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
         border-radius: 14px;
@@ -87,35 +117,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
-# ==========================================
-# 🔑 กำหนดรหัสผ่านสำหรับเข้าใช้งานระบบ
-# ==========================================
-APP_PASSWORD = "1234"  # <-- เปลี่ยนรหัสผ่านตรงนี้ได้
-
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-
-def check_password():
-    if not st.session_state.authenticated:
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 1.2, 1])
-        with col2:
-            with st.container(border=True):
-                st.markdown("<h2 style='text-align: center;'>🔒 เข้าสู่ระบบ</h2>", unsafe_allow_html=True)
-                st.caption("<div style='text-align: center; margin-bottom: 12px;'>ระบบจัดการคลังและโซนสินค้า TKK ERP</div>", unsafe_allow_html=True)
-                pwd = st.text_input("กรุณากรอกรหัสผ่าน (Password):", type="password")
-                if st.button("เข้าสู่ระบบ 🚀", type="primary", use_container_width=True):
-                    if pwd == APP_PASSWORD:
-                        st.session_state.authenticated = True
-                        st.rerun()
-                    else:
-                        st.error("❌ รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง")
-        return False
-    return True
-
-if not check_password():
-    st.stop()
 
 # ==========================================
 # 🚀 ตัวแปรและฟังก์ชันระบบคลังสินค้า
@@ -261,11 +262,12 @@ with st.sidebar:
     
     if st.button("🚪 ออกจากระบบ (Logout)", use_container_width=True):
         st.session_state.authenticated = False
+        st.session_state.admin_authenticated = False
         st.rerun()
         
     st.divider()
     
-    # 1. หัวข้อหลัก: ฟังก์ชันการทำงาน (ตัวอักษรใหญ่ หนา พร้อมแถบสีนำสายตา)
+    # 1. ฟังก์ชันการทำงาน
     st.markdown("""
         <div style="font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; border-left: 4px solid #2563eb; padding-left: 8px;">
             🧭 ฟังก์ชันการทำงาน
@@ -287,7 +289,7 @@ with st.sidebar:
     
     st.divider()
     
-    # 2. หัวข้อหลัก: โซนสินค้า (30 โซน) (ตัวอักษรใหญ่ หนา พร้อมแถบสีเขียว)
+    # 2. โซนสินค้า (30 โซน)
     st.markdown("""
         <div style="font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; border-left: 4px solid #10b981; padding-left: 8px;">
             📍 โซนสินค้า (30 โซน)
@@ -297,70 +299,100 @@ with st.sidebar:
     
     st.divider()
     
-    # 3. หัวข้อหลัก: จัดการข้อมูล [โซน XX] (ตัวอักษรใหญ่ หนา พร้อมแถบสีส้ม)
-    st.markdown(f"""
+    # 3. ส่วนซ่อนการอัปโหลดไฟล์ + เข้ารหัส Admin (Admin Management Panel)
+    st.markdown("""
         <div style="font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; border-left: 4px solid #f59e0b; padding-left: 8px;">
-            ⚙️ จัดการข้อมูล [โซน {selected_zone}]
+            ⚙️ โหมดจัดการข้อมูล (Admin)
         </div>
     """, unsafe_allow_html=True)
     
-    with st.expander(f"📥 แนบไฟล์ข้อมูลเข้าโซน {selected_zone}", expanded=False):
-        uploaded_files = st.file_uploader(
-            f"เลือกไฟล์สำหรับโซน {selected_zone} (PDF, CSV, XLSX)", 
-            type=["pdf", "csv", "xlsx"], 
-            accept_multiple_files=True,
-            key=f"uploader_{selected_zone}_{st.session_state.uploader_key}"
-        )
-        
-        if uploaded_files:
-            preview_dfs = []
-            for u_file in uploaded_files:
-                try:
-                    if u_file.name.endswith(".pdf"):
-                        reader = PdfReader(u_file)
-                        full_text = "".join([page.extract_text() + "\n" for page in reader.pages])
-                        t_df = extract_fields_from_text(full_text, u_file.name, selected_zone)
-                    elif u_file.name.endswith(".csv"):
-                        t_df = clean_and_prepare_df(pd.read_csv(u_file), u_file.name, selected_zone)
-                    elif u_file.name.endswith(".xlsx"):
-                        t_df = clean_and_prepare_df(pd.read_excel(u_file), u_file.name, selected_zone)
-                    
-                    if not t_df.empty:
-                        t_df["โซน"] = t_df["โซน"].replace({"": selected_zone, "-": selected_zone}).fillna(selected_zone)
-                        preview_dfs.append(t_df)
-                except Exception as e:
-                    st.error(f"ไฟล์ {u_file.name} มีปัญหา: {e}")
+    if not st.session_state.admin_authenticated:
+        with st.expander("🔒 ปลดล็อกเพื่ออัปโหลดข้อมูล (Admin Only)", expanded=False):
+            admin_pwd = st.text_input("กรอกรหัสผ่าน Admin:", type="password", key="admin_pwd_input")
+            if st.button("ยืนยันปลดล็อก 🔓", use_container_width=True):
+                if admin_pwd == ADMIN_PASSWORD:
+                    st.session_state.admin_authenticated = True
+                    st.success("ปลดล็อกโหมด Admin สำเร็จ!")
+                    st.rerun()
+                else:
+                    st.error("❌ รหัสผ่าน Admin ไม่ถูกต้อง")
+    else:
+        st.success("🟢 เข้าสู่โหมด Admin แล้ว")
+        if st.button("🔒 ล็อกโหมด Admin", use_container_width=True):
+            st.session_state.admin_authenticated = False
+            st.rerun()
             
-            if preview_dfs:
-                combined_new_df = pd.concat(preview_dfs, ignore_index=True)
-                st.info(f"พร้อมบันทึก: {len(combined_new_df)} รายการ")
+        with st.expander(f"📥 แนบไฟล์ข้อมูลเข้าโซน {selected_zone}", expanded=True):
+            uploaded_files = st.file_uploader(
+                f"เลือกไฟล์สำหรับโซน {selected_zone} (PDF, CSV, XLSX)", 
+                type=["pdf", "csv", "xlsx"], 
+                accept_multiple_files=True,
+                key=f"uploader_{selected_zone}_{st.session_state.uploader_key}"
+            )
+            
+            if uploaded_files:
+                preview_dfs = []
+                for u_file in uploaded_files:
+                    try:
+                        if u_file.name.endswith(".pdf"):
+                            reader = PdfReader(u_file)
+                            full_text = "".join([page.extract_text() + "\n" for page in reader.pages])
+                            t_df = extract_fields_from_text(full_text, u_file.name, selected_zone)
+                        elif u_file.name.endswith(".csv"):
+                            t_df = clean_and_prepare_df(pd.read_csv(u_file), u_file.name, selected_zone)
+                        elif u_file.name.endswith(".xlsx"):
+                            t_df = clean_and_prepare_df(pd.read_excel(u_file), u_file.name, selected_zone)
+                        
+                        if not t_df.empty:
+                            t_df["โซน"] = t_df["โซน"].replace({"": selected_zone, "-": selected_zone}).fillna(selected_zone)
+                            preview_dfs.append(t_df)
+                    except Exception as e:
+                        st.error(f"ไฟล์ {u_file.name} มีปัญหา: {e}")
                 
-                if st.button("💾 อัปโหลดบันทึกเข้าสู่ระบบ", type="primary", use_container_width=True):
-                    if st.session_state.current_df.empty:
-                        st.session_state.current_df = combined_new_df
-                    else:
-                        st.session_state.current_df = pd.concat([st.session_state.current_df, combined_new_df], ignore_index=True)
-                        if "รหัสสินค้า" in st.session_state.current_df.columns:
-                            st.session_state.current_df.drop_duplicates(subset=["รหัสสินค้า"], keep="last", inplace=True)
+                if preview_dfs:
+                    combined_new_df = pd.concat(preview_dfs, ignore_index=True)
+                    st.info(f"พร้อมบันทึก: {len(combined_new_df)} รายการ")
                     
-                    save_database(st.session_state.current_df)
-                    st.session_state.uploader_key += 1
-                    st.success("บันทึกข้อมูลเรียบร้อย!")
-                    st.rerun()
+                    if st.button("💾 อัปโหลดบันทึกเข้าสู่ระบบ", type="primary", use_container_width=True):
+                        if st.session_state.current_df.empty:
+                            st.session_state.current_df = combined_new_df
+                        else:
+                            # รวมข้อมูลเดิมและใหม่ (Upsert ข้อมูลตามรหัสสินค้า)
+                            st.session_state.current_df = pd.concat([st.session_state.current_df, combined_new_df], ignore_index=True)
+                            if "รหัสสินค้า" in st.session_state.current_df.columns:
+                                st.session_state.current_df.drop_duplicates(subset=["รหัสสินค้า"], keep="last", inplace=True)
+                        
+                        save_database(st.session_state.current_df)
+                        st.session_state.uploader_key += 1
+                        st.success("บันทึกข้อมูลเรียบร้อย!")
+                        st.rerun()
 
-    with st.expander(f"📁 ลบข้อมูลไฟล์ในโซน {selected_zone}", expanded=False):
-        df_all = st.session_state.current_df
-        if not df_all.empty and "โซน" in df_all.columns:
-            filter_cond = (df_all["โซน"] == selected_zone)
-            zone_files = df_all[filter_cond]["ชื่อไฟล์ที่มา"].dropna().unique().tolist()
-            if zone_files:
-                selected_remove_file = st.selectbox("เลือกไฟล์ที่ต้องการลบ:", options=zone_files)
-                if st.button("🗑️ ยืนยันลบไฟล์", use_container_width=True):
-                    del_cond = (st.session_state.current_df["ชื่อไฟล์ที่มา"] == selected_remove_file) & (st.session_state.current_df["โซน"] == selected_zone)
-                    st.session_state.current_df = st.session_state.current_df[~del_cond]
-                    save_database(st.session_state.current_df)
-                    st.success("ลบข้อมูลสำเร็จ")
-                    st.rerun()
+        with st.expander(f"📁 ลบข้อมูลไฟล์ในโซน {selected_zone}", expanded=False):
+            df_all = st.session_state.current_df
+            if not df_all.empty and "โซน" in df_all.columns:
+                filter_cond = (df_all["โซน"] == selected_zone)
+                zone_files = df_all[filter_cond]["ชื่อไฟล์ที่มา"].dropna().unique().tolist()
+                if zone_files:
+                    selected_remove_file = st.selectbox("เลือกไฟล์ที่ต้องการลบ:", options=zone_files)
+                    if st.button("🗑️ ยืนยันลบไฟล์", use_container_width=True):
+                        del_cond = (st.session_state.current_df["ชื่อไฟล์ที่มา"] == selected_remove_file) & (st.session_state.current_df["โซน"] == selected_zone)
+                        st.session_state.current_df = st.session_state.current_df[~del_cond]
+                        save_database(st.session_state.current_df)
+                        st.success("ลบข้อมูลสำเร็จ")
+                        st.rerun()
+
+        # ปุ่มสำรองฐานข้อมูล Master Database เพื่อป้องกันข้อมูลสูญหาย
+        if not st.session_state.current_df.empty:
+            st.divider()
+            output_backup = io.BytesIO()
+            st.session_state.current_df.to_csv(output_backup, index=False, encoding="utf-8-sig")
+            st.download_button(
+                label="📥 สำรองไฟล์ฐานข้อมูลรวม (Backup CSV)",
+                data=output_backup.getvalue(),
+                file_name="database_inventory_backup.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
 
 df_all = st.session_state.current_df
 
