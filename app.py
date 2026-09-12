@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🎨 ตกแต่ง CSS เพื่อความสวยงาม กรอบโค้งมน และตัวหนังสือเด่นชัด
+# 🎨 ตกแต่ง CSS เพื่อความสวยงาม เมนูกด และแดชบอร์ด
 # ==========================================
 st.markdown("""
 <style>
@@ -26,8 +26,37 @@ st.markdown("""
     /* ซ่อนปุ่มลบไฟล์เดิม */
     button[aria-label="Delete"] { display: none !important; }
     div[data-testid="stFileUploaderDeleteBtn"] { display: none !important; }
+
+    /* --- ตกแต่งกล่องเลือกเมนูฟังก์ชันใน Sidebar สไตล์ Card Button --- */
+    div[data-testid="stRadio"] > div {
+        gap: 10px !important;
+    }
+    div[data-testid="stRadio"] label {
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 12px !important;
+        padding: 12px 16px !important;
+        margin-bottom: 2px !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.03) !important;
+        transition: all 0.25s ease-in-out !important;
+        cursor: pointer !important;
+    }
+    div[data-testid="stRadio"] label:hover {
+        background: #f1f5f9 !important;
+        border-color: #94a3b8 !important;
+        transform: translateX(4px) !important;
+    }
+    div[data-testid="stRadio"] label:has(input:checked) {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%) !important;
+        border: 1.5px solid #2563eb !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15) !important;
+    }
+    div[data-testid="stRadio"] label:has(input:checked) p {
+        color: #1d4ed8 !important;
+        font-weight: 700 !important;
+    }
     
-    /* การ์ดสถิติ KPI Cards แบบพรีเมียม */
+    /* การ์ดสถิติ KPI Cards */
     .kpi-card {
         background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
         border-radius: 14px;
@@ -55,40 +84,6 @@ st.markdown("""
         font-size: 12px;
         color: #94a3b8;
         margin-top: 4px;
-    }
-    
-    /* กล่องควบคุมตัวกรอง (Filter Box) */
-    .filter-panel {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 14px;
-        padding: 16px 20px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
-        margin-bottom: 20px;
-    }
-    
-    /* กรอบล้อมรอบแผนภูมิ (Chart Box) */
-    .chart-box {
-        background: #ffffff;
-        border-radius: 14px;
-        padding: 18px;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.04);
-        height: 100%;
-    }
-    
-    /* สไตล์ตัวเลขคงเหลือในการ์ดสินค้า */
-    .metric-number {
-        font-size: 24px;
-        font-weight: 700;
-        color: #0f172a;
-        margin: 2px 0 4px 0;
-    }
-    .metric-number-neg {
-        font-size: 24px;
-        font-weight: 700;
-        color: #ef4444;
-        margin: 2px 0 4px 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -265,17 +260,17 @@ with st.sidebar:
         st.rerun()
         
     st.divider()
-    st.markdown("##### 🧭 เมนูเลือกฟังก์ชัน")
+    st.markdown("##### 🧭 ฟังก์ชันการทำงาน")
     selected_menu = st.radio(
         "เลือกฟังก์ชัน:",
         options=[
-            "จัดการสินค้า (รายโซน)",
-            "สินค้าที่มีปัญหา (คงเหลือติดลบ)",
-            "สต็อกสินค้า 0 ถึง 3000",
-            "สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)",
-            "ค้นหาสินค้า & Tag"
+            "📦 จัดการสินค้า (รายโซน)",
+            "⚠️ สินค้ามีปัญหา (สต็อกติดลบ)",
+            "📊 สต็อกสินค้า 0 ถึง 3000",
+            "📈 สรุปสายงานรายเดือน",
+            "🔍 ค้นหาสินค้า & Tag"
         ],
-        index=2, # ให้เปิดมาที่แดชบอร์ด 0-3000 ได้ทันที
+        index=0,
         label_visibility="collapsed"
     )
     
@@ -347,7 +342,7 @@ with st.sidebar:
 df_all = st.session_state.current_df
 
 # --- 1. หน้าจัดการสินค้า (รายโซน) ---
-if selected_menu == "จัดการสินค้า (รายโซน)":
+if "จัดการสินค้า" in selected_menu:
     if not df_all.empty and "โซน" in df_all.columns:
         df_zone = df_all[df_all["โซน"] == selected_zone].reset_index(drop=True)
     else:
@@ -421,7 +416,7 @@ if selected_menu == "จัดการสินค้า (รายโซน)":
         st.info(f"👈 โซน {selected_zone} ยังไม่มีข้อมูล สามารถอัปโหลดไฟล์ที่แถบซ้ายมือได้เลยครับ")
 
 # --- 2. หน้าสินค้าที่มีปัญหา (คงเหลือติดลบ) ---
-elif selected_menu == "สินค้าที่มีปัญหา (คงเหลือติดลบ)":
+elif "ติดลบ" in selected_menu:
     st.markdown("## ⚠️ สินค้าที่มีปัญหา (ยอดคงเหลือติดลบ)")
     
     if not df_all.empty and "คงเหลือ" in df_all.columns:
@@ -496,8 +491,8 @@ elif selected_menu == "สินค้าที่มีปัญหา (คง�
     else:
         st.info("ยังไม่มีข้อมูลในระบบ")
 
-# --- 3. หน้าสินค้าสต็อก 0 ถึง 3000 (เพิ่มดีไซน์สวยงามและกรอบ) ---
-elif selected_menu == "สต็อกสินค้า 0 ถึง 3000":
+# --- 3. หน้าสินค้าสต็อก 0 ถึง 3000 ---
+elif "0 ถึง 3000" in selected_menu:
     st.markdown("""
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
             <h1 style="font-size: 28px; font-weight: 700; margin: 0; color: #0f172a;">📊 แดชบอร์ดวิเคราะห์และรายงานสต็อก (0 ถึง 3,000)</h1>
@@ -509,7 +504,6 @@ elif selected_menu == "สต็อกสินค้า 0 ถึง 3000":
         df_work = df_all.copy()
         df_work["คงเหลือ_ตัวเลข"] = pd.to_numeric(df_work["คงเหลือ"], errors="coerce")
         
-        # 1. กล่องเลือกช่วงข้อมูล (Slider Frame)
         with st.container(border=True):
             st.markdown("##### 🎚️ ปรับแถบเลื่อนเพื่อระบุช่วงจำนวนสต็อกที่ต้องการ")
             stock_range = st.slider(
@@ -526,7 +520,6 @@ elif selected_menu == "สต็อกสินค้า 0 ถึง 3000":
         df_range = df_work[range_mask].reset_index(drop=True)
         
         if not df_range.empty:
-            # 2. การ์ดสถิติแบบพรีเมียม (KPI Cards)
             total_qty = int(df_range["คงเหลือ_ตัวเลข"].sum())
             avg_stock = df_range["คงเหลือ_ตัวเลข"].mean()
 
@@ -558,7 +551,6 @@ elif selected_menu == "สต็อกสินค้า 0 ถึง 3000":
 
             st.write("")
 
-            # 3. แผนภูมิแท่งในกรอบมนสวยงาม
             chart_col1, chart_col2 = st.columns(2)
             with chart_col1:
                 with st.container(border=True):
@@ -577,7 +569,6 @@ elif selected_menu == "สต็อกสินค้า 0 ถึง 3000":
 
             st.divider()
 
-            # 4. กล่องเลือกกรองตาม Tag
             unique_range_tags = sorted(list(df_range["แท็ก {Tag}"].dropna().unique()))
             selected_range_tag = st.selectbox(
                 "🏷️ กรองดูรายละเอียดตามกลุ่มแท็กสินค้า:", 
@@ -595,7 +586,6 @@ elif selected_menu == "สต็อกสินค้า 0 ถึง 3000":
                 range_report_title = f"รายงานสต็อก_{min_stock}_ถึง_{max_stock}_แท็ก_{selected_range_tag}"
                 range_file_suffix = f"{min_stock}_{max_stock}_แท็ก_{clean_tag}"
 
-            # 5. ตารางข้อมูลและปุ่มดาวน์โหลดรายงาน Excel
             st.markdown(f"#### 📋 {range_report_title.replace('_', ' ')} ({len(active_range_df):,} รายการ)")
             display_range_df = active_range_df.drop(columns=["ชื่อไฟล์ที่มา", "คงเหลือ_ตัวเลข", "กลุ่มสต็อก"], errors="ignore")
             
@@ -617,7 +607,6 @@ elif selected_menu == "สต็อกสินค้า 0 ถึง 3000":
 
             st.divider()
 
-            # 6. แสดงการ์ดรูปภาพสินค้า
             st.markdown(f"##### 🖼️ รายการการ์ดสินค้า (สต็อกช่วง {min_stock} ถึง {max_stock})")
             total_range_count = len(active_range_df)
             total_range_pages = max(1, math.ceil(total_range_count / ITEMS_PER_PAGE))
@@ -647,7 +636,7 @@ elif selected_menu == "สต็อกสินค้า 0 ถึง 3000":
         st.info("ยังไม่มีข้อมูลในระบบ")
 
 # --- 4. สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง) ---
-elif selected_menu == "สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)":
+elif "สรุปสายงาน" in selected_menu:
     st.markdown("## 📊 ข้อมูลสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)")
     if not df_all.empty and "โซน" in df_all.columns:
         zone_summary = df_all.groupby("โซน").size().reset_index(name="จำนวนสินค้าทั้งหมด")
@@ -659,7 +648,7 @@ elif selected_menu == "สรุปสายงานรายเดือน (�
         st.info("ยังไม่มีข้อมูลสต็อกสินค้า")
 
 # --- 5. ค้นหาสินค้า & Tag ---
-elif selected_menu == "ค้นหาสินค้า & Tag":
+elif "ค้นหาสินค้า" in selected_menu:
     st.markdown("## 🔍 ค้นหาสินค้า & แท็กข้ามทุกโซน")
     with st.container(border=True):
         keyword = st.text_input("พิมพ์รหัสสินค้า, รหัสรอง, หรือชื่อสินค้าที่ต้องการค้นหา:")
