@@ -123,29 +123,25 @@ def render_product_cards(items_df, current_zone):
         
         code_for_img = barcode if (barcode and len(barcode) >= 5) else sub_code
         img_url = f"https://tkkonlineshop.com/images/products/{code_for_img}.jpg"
-        web_link = f"https://tkkonlineshop.com/products/{code_for_img}" if code_for_img else "https://tkkonlineshop.com"
         
         with cols[idx % 4]:
             with st.container(border=True):
                 st.markdown(f"""
                 <div style="text-align: center; margin-bottom: 10px;">
-                    <a href="{web_link}" target="_blank">
-                        <img src="{img_url}" 
-                             onerror="this.onerror=null; this.src='{NO_IMAGE_PLACEHOLDER}';" 
-                             loading="lazy"
-                             style="width: 100%; aspect-ratio: 1/1; object-fit: contain; border-radius: 12px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.08);" />
-                    </a>
+                    <img src="{img_url}" 
+                         onerror="this.onerror=null; this.src='{NO_IMAGE_PLACEHOLDER}';" 
+                         loading="lazy"
+                         style="width: 100%; aspect-ratio: 1/1; object-fit: contain; border-radius: 12px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.08);" />
                 </div>
                 <div style="text-align: center; height: 44px; overflow: hidden; font-size: 13px; font-weight: 600; color: #1e293b; line-height: 1.4; margin-bottom: 6px;">
                     • {name}
                 </div>
-                <div style="text-align: center; font-size: 11px; color: #64748b; line-height: 1.6; margin-bottom: 8px;">
+                <div style="text-align: center; font-size: 11px; color: #64748b; line-height: 1.6; margin-bottom: 6px;">
                     <div>รหัสสินค้า: <span style="color: #334155;">{barcode if barcode else '-'}</span></div>
                     <div>รหัสรอง: <b style="color: #2563eb;">{sub_code if sub_code else '-'}</b></div>
                     <div>จำนวนคงเหลือ : <b style="color: {'#dc2626' if '-' in stock else '#059669'};">{stock}</b></div>
                 </div>
                 """, unsafe_allow_html=True)
-                st.link_button("🛒 รายละเอียด / ใส่ตะกร้า", web_link, use_container_width=True)
 
 if "current_df" not in st.session_state:
     st.session_state.current_df = load_database()
@@ -358,7 +354,7 @@ elif selected_menu == "สินค้าที่มีปัญหา (คง�
 
             st.divider()
 
-            # 3. แสดงรูปภาพสินค้าติดลบ
+            # 3. แสดงรูปภาพสินค้าติดลบ (ไม่มีปุ่มใส่ตะกร้า)
             st.markdown("##### 🖼️ รายการการ์ดรูปภาพสินค้าติดลบ")
             total_neg_count = len(active_neg_df)
             total_neg_pages = max(1, math.ceil(total_neg_count / ITEMS_PER_PAGE))
