@@ -516,47 +516,102 @@ df_trans = st.session_state.trans_df
 # 🧭 จัดการแสดงผลตามเมนูที่เลือก
 # ==========================================
 
-# --- 0. หน้าแดชบอร์ดภาพรวมระบบ (แสดงการซื้อและการขายทั้ง 30 โซน) ---
+# --- 0. หน้าแดชบอร์ดภาพรวมระบบ (แสดงการซื้อ-การขายแยกแต่ละโซน 30 โซน) ---
 if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
     st.markdown("""
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
             <h1 style="font-size: 28px; font-weight: 800; margin: 0; color: #0f172a;">📊 แดชบอร์ดภาพรวมระบบคลังสินค้า (30 โซน)</h1>
         </div>
-        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">ศูนย์รวมสถิติ ตัวเลขชี้วัดหลัก (KPIs) ยอดซื้อ-ยอดขาย และสถานะสินค้าคงคลังทั่วทั้ง 30 โซน</p>
+        <p style="color: #64748b; font-size: 14px; margin-bottom: 16px;">สถิติระดับสต็อก ยอดการสั่งซื้อ (รับเข้า) และยอดขายสินค้าแบบแยกค่าอิสระรายโซน</p>
     """, unsafe_allow_html=True)
 
     if not df_all.empty and "คงเหลือ" in df_all.columns:
         df_dash = df_all.copy()
         df_dash["คงเหลือ_ตัวเลข"] = pd.to_numeric(df_dash["คงเหลือ"], errors="coerce").fillna(0)
-        
-        total_skus = len(df_dash)
-        total_units = int(df_dash["คงเหลือ_ตัวเลข"].sum())
-        neg_items = (df_dash["คงเหลือ_ตัวเลข"] < 0).sum()
-        zero_items = (df_dash["คงเหลือ_ตัวเลข"] == 0).sum()
-        active_zones_count = df_dash["โซน"].nunique() if "โซน" in df_dash.columns else 0
 
-        # KPI สต็อกคงคลัง
+        # ------------------------------------------------------------
+        # 🎛️ แถบควบคุม: เลือกกรองดูเฉพาะโซน หรือดูทุกโซน
+        # ------------------------------------------------------------
+        with st.container(border=True):
+            zone_filter_opts = ["แสดงทุกโซน (30 โซน)"] + ALL_ZONES
+            selected_dash_zone = st.selectbox(
+                "📍 เลือกโซนเพื่อดูยอดรับเข้า-ยอดขาย และสถิติคลัง (แสดงแยกค่าไม่รวมกัน):",
+                options=zone_filter_opts,
+                index=0
+            )
+
+        # กรองข้อมูลตามโซนที่เลือก
+        is_all_zones = selected_dash_zone == "แสดงทุกโซน (30 โซน)"
+        if not is_all_zones:
+            target_dash_df = df_dash[df_dash["โซน"] == selected_dash_zone].copy()
+            zone_label_text = f"โซน {selected_dash_zone}"
+        else:
+            target_dash_df = df_dash.copy()
+            zone_label_text = "ทั้ง 30 โซน"
+
+        total_skus = len(target_dash_df)
+        total_units = int(target_dash_df["คงเหลือ_ตัวเลข"].sum())
+        neg_items = (target_dash_df["คงเหลือ_ตัวเลข"] < 0).sum()
+        zero_items = (target_dash_df["คงเหลือ_ตัวเลข"] == 0).sum()
+
+        # คำนวณยอดรับเข้า-ขายแยกเฉพาะโซนนั้นๆ
+        df_trans_calc = pd.DataFrame()
+        in_sum = 0
+        out_sum = 0
+        if not df_trans.empty:
+            df_trans_calc = df_trans.copy()
+            df_trans_calc["จำนวน_num"] = pd.to_numeric(df_trans_calc["จำนวน"], errors="coerce").fillna(0)
+            
+            if not is_all_zones:
+                df_trans_filtered = df_trans_calc[df_trans_calc["โซน"] == selected_dash_zone]
+            else:
+                df_trans_filtered = df_trans_calc
+
+            in_sum = int(df_trans_filtered[df_trans_filtered["ประเภทธุรกรรม"] == "รับเข้าสินค้า"]["จำนวน_num"].sum())
+            out_sum = int(df_trans_filtered[df_trans_filtered["ประเภทธุรกรรม"] == "ขายสินค้า"]["จำนวน_num"].sum())
+
+        # การ์ดสรุปยอดซื้อ (รับเข้า) และ ยอดขาย (แยกตามโซน)
+        st.markdown(f"##### 📌 สรุปยอดการซื้อและยอดขาย [{zone_label_text}]")
+        tc1, tc2 = st.columns(2)
+        with tc1:
+            st.markdown(f"""
+                <div class="kpi-card" style="border-left: 6px solid #059669; background: #f0fdf4;">
+                    <div class="kpi-title" style="color: #166534;">📥 ยอดรับเข้า (สั่งซื้อ) : {zone_label_text}</div>
+                    <div class="kpi-value" style="color: #15803d;">+{in_sum:,} <span style="font-size: 16px;">ชิ้น</span></div>
+                    <div class="kpi-sub">ยอดรับเข้าแยกเฉพาะ {zone_label_text}</div>
+                </div>
+            """, unsafe_allow_html=True)
+        with tc2:
+            st.markdown(f"""
+                <div class="kpi-card" style="border-left: 6px solid #ef4444; background: #fef2f2;">
+                    <div class="kpi-title" style="color: #991b1b;">📤 ยอดขายสินค้า : {zone_label_text}</div>
+                    <div class="kpi-value" style="color: #b91c1c;">-{out_sum:,} <span style="font-size: 16px;">ชิ้น</span></div>
+                    <div class="kpi-sub">ยอดขายออกแยกเฉพาะ {zone_label_text}</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        # การ์ดสถานะสต็อกคงคลัง 4 ช่อง
         c1, c2, c3, c4 = st.columns(4)
         with c1:
             st.markdown(f"""
                 <div class="kpi-card">
-                    <div class="kpi-title">📦 รายการสินค้าทั้งหมด</div>
+                    <div class="kpi-title">📦 รายการสินค้า ({zone_label_text})</div>
                     <div class="kpi-value" style="color: #2563eb;">{total_skus:,} <span style="font-size: 15px;">รายการ</span></div>
-                    <div class="kpi-sub">กระจายอยู่ใน {active_zones_count} โซนที่มีข้อมูล</div>
+                    <div class="kpi-sub">จำนวน SKU ที่มีใน {zone_label_text}</div>
                 </div>
             """, unsafe_allow_html=True)
         with c2:
             st.markdown(f"""
                 <div class="kpi-card">
-                    <div class="kpi-title">🔢 ยอดชิ้นคงคลังรวม</div>
+                    <div class="kpi-title">🔢 ยอดคงคลัง ({zone_label_text})</div>
                     <div class="kpi-value" style="color: #059669;">{total_units:,} <span style="font-size: 15px;">ชิ้น</span></div>
-                    <div class="kpi-sub">ปริมาณสินค้าทั้งหมดในคลัง</div>
+                    <div class="kpi-sub">ปริมาณคงเหลือใน {zone_label_text}</div>
                 </div>
             """, unsafe_allow_html=True)
         with c3:
             st.markdown(f"""
                 <div class="kpi-card">
-                    <div class="kpi-title">⚠️ สินค้าสต็อกติดลบ</div>
+                    <div class="kpi-title">⚠️ สินค้าติดลบ ({zone_label_text})</div>
                     <div class="kpi-value" style="color: #dc2626;">{neg_items:,} <span style="font-size: 15px;">รายการ</span></div>
                     <div class="kpi-sub">ต้องตรวจสอบยอดและเคลียร์สต็อก</div>
                 </div>
@@ -564,47 +619,19 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
         with c4:
             st.markdown(f"""
                 <div class="kpi-card">
-                    <div class="kpi-title">⭕ สินค้าหมดสต็อก (0)</div>
+                    <div class="kpi-title">⭕ สต็อกหมด (0) ({zone_label_text})</div>
                     <div class="kpi-value" style="color: #f59e0b;">{zero_items:,} <span style="font-size: 15px;">รายการ</span></div>
                     <div class="kpi-sub">สินค้าพร้อมสั่งซื้อเติมสต็อก</div>
                 </div>
             """, unsafe_allow_html=True)
 
-        # KPI สรุปยอดซื้อ (รับเข้า) และยอดขาย (30 โซน)
-        in_sum = 0
-        out_sum = 0
-        df_trans_calc = pd.DataFrame()
-        if not df_trans.empty:
-            df_trans_calc = df_trans.copy()
-            df_trans_calc["จำนวน_num"] = pd.to_numeric(df_trans_calc["จำนวน"], errors="coerce").fillna(0)
-            in_sum = int(df_trans_calc[df_trans_calc["ประเภทธุรกรรม"] == "รับเข้าสินค้า"]["จำนวน_num"].sum())
-            out_sum = int(df_trans_calc[df_trans_calc["ประเภทธุรกรรม"] == "ขายสินค้า"]["จำนวน_num"].sum())
-            
-        tc1, tc2 = st.columns(2)
-        with tc1:
-            st.markdown(f"""
-                <div class="kpi-card" style="border-left: 5px solid #059669;">
-                    <div class="kpi-title">📥 ยอดรวมรับเข้า (สั่งซื้อ) ทั้ง 30 โซน</div>
-                    <div class="kpi-value" style="color: #059669;">+{in_sum:,} <span style="font-size: 15px;">ชิ้น</span></div>
-                    <div class="kpi-sub">บันทึกสะสมจากเอกสารรับเข้าสินค้า</div>
-                </div>
-            """, unsafe_allow_html=True)
-        with tc2:
-            st.markdown(f"""
-                <div class="kpi-card" style="border-left: 5px solid #ef4444;">
-                    <div class="kpi-title">📤 ยอดรวมการขายสินค้าทั้ง 30 โซน</div>
-                    <div class="kpi-value" style="color: #ef4444;">-{out_sum:,} <span style="font-size: 15px;">ชิ้น</span></div>
-                    <div class="kpi-sub">บันทึกสะสมจากเอกสารยอดขาย</div>
-                </div>
-            """, unsafe_allow_html=True)
-
         st.write("")
 
-        # แผนภูมิเปรียบเทียบการซื้อ vs การขาย และ แผนภูมิสต็อก
+        # แผนภูมิเปรียบเทียบการซื้อ vs การขาย (แยกรายโซน)
         col_g1, col_g2 = st.columns(2)
         with col_g1:
             with st.container(border=True):
-                st.markdown("##### 🛒 เปรียบเทียบยอดรับเข้า (ซื้อ) vs ยอดขาย แยกตามโซน")
+                st.markdown("##### 🛒 ยอดรับเข้า (ซื้อ) และ ยอดขาย แยกตามโซน")
                 if not df_trans_calc.empty:
                     piv_zone = df_trans_calc.pivot_table(
                         index="โซน", 
@@ -615,7 +642,7 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
                     )
                     chart_cols = [c for c in ["รับเข้าสินค้า", "ขายสินค้า"] if c in piv_zone.columns]
                     if chart_cols:
-                        st.bar_chart(piv_zone[chart_cols], color=["#10b981", "#ef4444"] if len(chart_cols)==2 else None)
+                        st.bar_chart(piv_zone[chart_cols])
                     else:
                         st.info("ยังไม่มีข้อมูลธุรกรรมรับเข้าหรือขาย")
                 else:
@@ -623,14 +650,16 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
 
         with col_g2:
             with st.container(border=True):
-                st.markdown("##### 📍 ปริมาณสินค้าคงคลังแยกตามแต่ละโซน (SKU Count)")
+                st.markdown("##### 📍 ปริมาณสินค้าคงคลังแยกตามแต่ละโซน (SKU)")
                 zone_counts = df_dash.groupby("โซน").size().sort_values(ascending=False)
                 st.bar_chart(zone_counts, color="#3b82f6")
 
         st.divider()
 
-        # ตารางสรุปภาพรวม 30 โซน (รวมคอลัมน์รับเข้า-ขาย)
-        st.markdown("#### 📋 ตารางสรุปภาพรวมสถานะและธุรกรรมแยกตามโซนสินค้า (30 โซน)")
+        # ------------------------------------------------------------
+        # 📋 ตารางสรุป 30 โซน แยกแถวละ 1 โซน แสดงยอดรับเข้าและขายแยกช่อง
+        # ------------------------------------------------------------
+        st.markdown("#### 📋 ตารางสรุปยอดรับเข้า ยอดขาย และสถานะสต็อกแยกรายโซน (30 โซน)")
         zone_summary_table = df_dash.groupby("โซน").agg(
             จำนวนรายการ_SKU=("รหัสสินค้า", "count"),
             ยอดชิ้นคงคลังรวม=("คงเหลือ_ตัวเลข", "sum"),
@@ -638,20 +667,30 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
             รายการสต็อกศูนย์=("คงเหลือ_ตัวเลข", lambda x: (x == 0).sum())
         ).reset_index()
 
-        # รวมข้อมูลรับเข้าและขายเข้าสู่ตารางสรุปรายโซน
+        # รวมยอดรับเข้าและยอดขายแยกโซน
         if not df_trans_calc.empty:
-            in_by_zone = df_trans_calc[df_trans_calc["ประเภทธุรกรรม"] == "รับเข้าสินค้า"].groupby("โซน")["จำนวน_num"].sum().reset_index(name="ยอดรับเข้ารวม (ชิ้น)")
-            out_by_zone = df_trans_calc[df_trans_calc["ประเภทธุรกรรม"] == "ขายสินค้า"].groupby("โซน")["จำนวน_num"].sum().reset_index(name="ยอดขายรวม (ชิ้น)")
+            in_by_zone = df_trans_calc[df_trans_calc["ประเภทธุรกรรม"] == "รับเข้าสินค้า"].groupby("โซน")["จำนวน_num"].sum().reset_index(name="ยอดรับเข้า (ชิ้น)")
+            out_by_zone = df_trans_calc[df_trans_calc["ประเภทธุรกรรม"] == "ขายสินค้า"].groupby("โซน")["จำนวน_num"].sum().reset_index(name="ยอดขาย (ชิ้น)")
             
-            zone_summary_table = zone_summary_table.merge(in_by_zone, on="โซน", how="left").fillna({"ยอดรับเข้ารวม (ชิ้น)": 0})
-            zone_summary_table = zone_summary_table.merge(out_by_zone, on="โซน", how="left").fillna({"ยอดขายรวม (ชิ้น)": 0})
-            zone_summary_table["ยอดรับเข้ารวม (ชิ้น)"] = zone_summary_table["ยอดรับเข้ารวม (ชิ้น)"].astype(int)
-            zone_summary_table["ยอดขายรวม (ชิ้น)"] = zone_summary_table["ยอดขายรวม (ชิ้น)"].astype(int)
+            zone_summary_table = zone_summary_table.merge(in_by_zone, on="โซน", how="left").fillna({"ยอดรับเข้า (ชิ้น)": 0})
+            zone_summary_table = zone_summary_table.merge(out_by_zone, on="โซน", how="left").fillna({"ยอดขาย (ชิ้น)": 0})
+            zone_summary_table["ยอดรับเข้า (ชิ้น)"] = zone_summary_table["ยอดรับเข้า (ชิ้น)"].astype(int)
+            zone_summary_table["ยอดขาย (ชิ้น)"] = zone_summary_table["ยอดขาย (ชิ้น)"].astype(int)
         else:
-            zone_summary_table["ยอดรับเข้ารวม (ชิ้น)"] = 0
-            zone_summary_table["ยอดขายรวม (ชิ้น)"] = 0
+            zone_summary_table["ยอดรับเข้า (ชิ้น)"] = 0
+            zone_summary_table["ยอดขาย (ชิ้น)"] = 0
 
-        st.dataframe(zone_summary_table, use_container_width=True)
+        # จัดลำดับคอลัมน์ให้อ่านง่าย
+        col_order = ["โซน", "ยอดรับเข้า (ชิ้น)", "ยอดขาย (ชิ้น)", "ยอดชิ้นคงคลังรวม", "จำนวนรายการ_SKU", "รายการติดลบ", "รายการสต็อกศูนย์"]
+        zone_summary_table = zone_summary_table[[c for c in col_order if c in zone_summary_table.columns]]
+
+        # ไฮไลต์แถวโซนที่กำลังเลือกดูอยู่
+        if not is_all_zones:
+            st.dataframe(zone_summary_table[zone_summary_table["โซน"] == selected_dash_zone], use_container_width=True)
+            with st.expander("👁️ กดดูข้อมูลครบทั้ง 30 โซนพร้อมกัน", expanded=False):
+                st.dataframe(zone_summary_table, use_container_width=True)
+        else:
+            st.dataframe(zone_summary_table, use_container_width=True)
 
         out_dash = io.BytesIO()
         with pd.ExcelWriter(out_dash, engine="openpyxl") as writer:
@@ -661,9 +700,9 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
                 df_trans.to_excel(writer, sheet_name="Transactions", index=False)
 
         st.download_button(
-            label="📥 ดาวน์โหลดรายงานสรุปภาพรวม 30 โซน (Excel)",
+            label="📥 ดาวน์โหลดรายงานสรุปแยกรายโซน (Excel)",
             data=out_dash.getvalue(),
-            file_name="รายงานสรุปคลังสินค้า_ซื้อขาย_30โซน.xlsx",
+            file_name="รายงานสรุปคลัง_ซื้อขาย_แยกรายโซน.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             type="primary"
         )
