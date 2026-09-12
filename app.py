@@ -157,15 +157,14 @@ with st.sidebar:
     st.title("📦 การจัดการสต็อก")
     
     st.markdown("##### 🧭 ฟังก์ชันการทำงาน")
-    # เปลี่ยนเป็น radio button ให้สามารถคลิกสลับฟังก์ชันได้จริง
+    # ตัดตัวเลือกช่องจำลองใบเสร็จออก เหลือ 4 เมนูหลัก
     selected_menu = st.radio(
         "เลือกฟังก์ชัน:",
         options=[
             "จัดการสินค้า (รายโซน)",
             "สินค้าที่มีปัญหา (คงเหลือติดลบ)",
             "สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)",
-            "ค้นหาสินค้า & Tag",
-            "ช่องจำลองใบเสร็จสินค้า"
+            "ค้นหาสินค้า & Tag"
         ],
         index=0,
         label_visibility="collapsed"
@@ -323,7 +322,7 @@ elif selected_menu == "สินค้าที่มีปัญหา (คง�
             st.divider()
             st.dataframe(df_negative, use_container_width=True)
         else:
-            st.success("🎉 เยี่ยมมาก! ไม่พบสินค้าที่มียอดคงเหลือติดลบในระบบ")
+            st.success("🎉 ไม่พบสินค้าที่มียอดคงเหลือติดลบในระบบ")
     else:
         st.info("ยังไม่มีข้อมูลในระบบ")
 
@@ -352,16 +351,3 @@ elif selected_menu == "ค้นหาสินค้า & Tag":
         st.info(f"ผลการค้นหา: พบ {len(res_df):,} รายการ")
         render_product_cards(res_df.head(ITEMS_PER_PAGE), "ค้นหา")
         st.dataframe(res_df, use_container_width=True)
-
-# --- 5. ช่องจำลองใบเสร็จสินค้า ---
-elif selected_menu == "ช่องจำลองใบเสร็จสินค้า":
-    st.title("⚪ ช่องจำลองใบเสร็จสินค้า (Receipt Preview)")
-    st.caption("ระบบจำลองการสร้างบิล/ใบเสร็จจากข้อมูลรายการสั่งซื้อล่าสุด")
-    if not df_all.empty and "จำนวนสั่งล่าสุด" in df_all.columns:
-        ordered_items = df_all[pd.to_numeric(df_all["จำนวนสั่งล่าสุด"], errors="coerce") > 0].reset_index(drop=True)
-        if not ordered_items.empty:
-            st.dataframe(ordered_items[["รหัสสินค้า", "รหัสรอง", "ชื่อรายการสินค้า", "จำนวนสั่งล่าสุด", "โซน"]], use_container_width=True)
-        else:
-            st.info("ไม่พบรายการที่มีประวัติสั่งซื้อล่าสุด (> 0)")
-    else:
-        st.info("ยังไม่มีข้อมูลรายการสั่งซื้อในระบบ")
