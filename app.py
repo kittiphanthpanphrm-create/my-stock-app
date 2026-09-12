@@ -171,7 +171,7 @@ def render_product_cards(items_df, current_zone):
                 <div style="text-align: center; font-size: 11px; color: #64748b; line-height: 1.6; margin-bottom: 6px;">
                     <div>รหัสสินค้า: <span style="color: #334155;">{barcode if barcode else '-'}</span></div>
                     <div>รหัสรอง: <b style="color: #2563eb;">{sub_code if sub_code else '-'}</b></div>
-                    <div>จำนวนคงเหลือ : <b style="color: {'#dc2626' if '-' in stock else '#059669'};">{stock}</b></div>
+                    <div>จำนวนคงเหลือ : <b style="color: {'#dc2626' if ('-' in stock or stock == '0') else '#059669'};">{stock}</b></div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -195,6 +195,7 @@ with st.sidebar:
         options=[
             "จัดการสินค้า (รายโซน)",
             "สินค้าที่มีปัญหา (คงเหลือติดลบ)",
+            "สต็อกสินค้า 0 ถึง -100",
             "สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)",
             "ค้นหาสินค้า & Tag"
         ],
@@ -346,8 +347,8 @@ elif selected_menu == "สินค้าที่มีปัญหา (คง�
     st.title("⚠️ สินค้าที่มีปัญหา (ยอดคงเหลือติดลบ)")
     
     if not df_all.empty and "คงเหลือ" in df_all.columns:
-        neg_mask = df_all["คงเหลือ"].astype(str).str.contains("-", na=False)
-        df_negative = df_all[neg_mask].reset_index(drop=True)
+        stock_series = pd.to_numeric(df_all["คงเหลือ"], errors="coerce")
+        df_negative = df_all[stock_series < 0].reset_index(drop=True)
         
         if not df_negative.empty:
             st.error(f"ตรวจพบสินค้าติดลบทั้งหมด {len(df_negative):,} รายการทั่วทั้งระบบ")
@@ -417,7 +418,89 @@ elif selected_menu == "สินค้าที่มีปัญหา (คง�
     else:
         st.info("ยังไม่มีข้อมูลในระบบ")
 
-# --- 3. สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง) ---
+# --- 3. หน้าสินค้าสต็อกต่ำ/หมด (0 ถึง -100) ---
+elif selected_menu == "สต็อกสินค้า 0 ถึง -100":
+    st.title("📉 สินค้าสต็อกต่ำและติดลบ (คงเหลือ 0 ถึง -100)")
+    
+    if not df_all.empty and "คงเหลือ" in df_all.columns:
+        stock_numeric = pd.to_numeric(df_all["คงเหลือ"], errors="coerce")
+        # กรองรายการที่ยอดคงเหลืออยู่ระหว่าง -100 ถึง 0
+        range_mask = (stock_numeric <= 0) & (stock_numeric >= -100)
+        df_range = df_all[range_mask].reset_index(drop=True)
+        
+        if not df_range.empty:
+            st.warning(f"🔔 พบสินค้าที่มียอดคงเหลือระหว่าง 0 ถึง -100 ทั้งหมด {len(df_range):,} รายการ")
+            
+            # กรองตามแท็ก
+            unique_range_tags = sorted(list(df_range["แท็ก {Tag}"].dropna().unique()))
+            selected_range_tag = st.selectbox(
+                "🏷️ กรองดูตามกลุ่มแท็ก:", 
+                options=["แสดงทุกกลุ่มแท็ก"] + unique_range_tags,
+                key="select_range_tag"
+            )
+            
+            if selected_range_tag == "แสดงทุกกลุ่มแท็ก":
+                active_range_df = df_range.copy()
+                range_report_title = "รายงานสินค้าสต็อก_0_ถึง_-100_ทั้งหมด"
+                range_file_suffix = "ทั้งหมด"
+            else:
+                active_range_df = df_range[df_range["แท็ก {Tag}"] == selected_range_tag].reset_index(drop=True)
+                clean_tag = re.sub(r'[\{\}]', '', selected_range_tag)
+                range_report_title = f"รายงานสินค้าสต็อก_0_ถึง_-100_แท็ก_{selected_range_tag}"
+                range_file_suffix = f"แท็ก_{clean_tag}"
+
+            # ตารางข้อมูลและปุ่มดาวน์โหลดรายงาน Excel
+            st.subheader(f"📋 {range_report_title.replace('_', ' ')} ({len(active_range_df):,} รายการ)")
+            display_range_df = active_range_df.drop(columns=["ชื่อไฟล์ที่มา"], errors="ignore")
+            
+            output_range = io.BytesIO()
+            with pd.ExcelWriter(output_range, engine="openpyxl") as writer:
+                clean_sheet = re.sub(r'[\/\\\?\*\[\]\:]', '_', range_file_suffix)[:31]
+                display_range_df.to_excel(writer, sheet_name=clean_sheet, index=False)
+            
+            st.download_button(
+                label=f"📥 ดาวน์โหลด Excel ({range_report_title.replace('_', ' ')})",
+                data=output_range.getvalue(),
+                file_name=f"{range_report_title}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                key="btn_download_range_excel"
+            )
+            
+            st.dataframe(display_range_df, use_container_width=True)
+
+            st.divider()
+
+            # แสดงการ์ดรูปภาพสินค้า
+            st.markdown("##### 🖼️ การ์ดรายการสินค้า (0 ถึง -100)")
+            total_range_count = len(active_range_df)
+            total_range_pages = max(1, math.ceil(total_range_count / ITEMS_PER_PAGE))
+            
+            r_col1, r_col2 = st.columns([3, 1])
+            with r_col1:
+                st.caption(f"แสดงตัวอย่างหน้าละ {ITEMS_PER_PAGE} รายการ")
+            with r_col2:
+                current_range_page = st.number_input(
+                    f"หน้าแสดงผล (จาก {total_range_pages} หน้า):", 
+                    min_value=1, 
+                    max_value=total_range_pages, 
+                    value=1, 
+                    step=1,
+                    key="range_page_input"
+                )
+            
+            start_range_idx = (current_range_page - 1) * ITEMS_PER_PAGE
+            end_range_idx = start_range_idx + ITEMS_PER_PAGE
+            page_range_df = active_range_df.iloc[start_range_idx:end_range_idx].reset_index(drop=True)
+
+            with st.container():
+                render_product_cards(page_range_df, "0 ถึง -100")
+        else:
+            st.success("🎉 ไม่พบสินค้าที่มียอดคงเหลืออยู่ในช่วง 0 ถึง -100")
+    else:
+        st.info("ยังไม่มีข้อมูลในระบบ")
+
+# --- 4. สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง) ---
 elif selected_menu == "สรุปสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)":
     st.title("📊 ข้อมูลสายงานรายเดือน (วิเคราะห์การเปลี่ยนแปลง)")
     if not df_all.empty and "โซน" in df_all.columns:
@@ -427,7 +510,7 @@ elif selected_menu == "สรุปสายงานรายเดือน (�
     else:
         st.info("ยังไม่มีข้อมูลสต็อกสินค้า")
 
-# --- 4. ค้นหาสินค้า & Tag ---
+# --- 5. ค้นหาสินค้า & Tag ---
 elif selected_menu == "ค้นหาสินค้า & Tag":
     st.title("🔍 ค้นหาสินค้า & แท็กข้ามทุกโซน")
     keyword = st.text_input("พิมพ์รหัสสินค้า, รหัสรอง, หรือชื่อสินค้าที่ต้องการค้นหา:")
