@@ -13,18 +13,10 @@ st.set_page_config(page_title="TKK ERP - จัดการคลังและ
 # ==========================================
 APP_PASSWORD = "1234"  # <-- เปลี่ยนรหัสผ่านที่ต้องการตรงนี้
 
-# ระบบตรวจสอบการล็อกอิน (Session State)
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 def check_password():
-    def password_entered():
-        if st.session_state["password_input"] == APP_PASSWORD:
-            st.session_state.authenticated = True
-            del st.session_state["password_input"]
-        else:
-            st.session_state.authenticated = False
-
     if not st.session_state.authenticated:
         st.markdown("<br><br>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 1.2, 1])
@@ -32,27 +24,21 @@ def check_password():
             with st.container(border=True):
                 st.markdown("<h2 style='text-align: center;'>🔒 เข้าสู่ระบบ</h2>", unsafe_allow_html=True)
                 st.caption("ระบบจัดการคลังและโซนสินค้า TKK ERP")
-                st.text_input(
-                    "กรุณากรอกรหัสผ่าน (Password):", 
-                    type="password", 
-                    key="password_input",
-                    on_change=password_entered
-                )
+                pwd = st.text_input("กรุณากรอกรหัสผ่าน (Password):", type="password")
                 if st.button("เข้าสู่ระบบ", type="primary", use_container_width=True):
-                    password_entered()
-                    if not st.session_state.authenticated:
-                        st.error("❌ รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง")
-                    else:
+                    if pwd == APP_PASSWORD:
+                        st.session_state.authenticated = True
                         st.rerun()
+                    else:
+                        st.error("❌ รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง")
         return False
     return True
 
-# หากยังไม่ได้ล็อกอิน ให้หยุดการทำงานและแสดงเฉพาะหน้ากรอกรหัสผ่าน
 if not check_password():
     st.stop()
 
 # ==========================================
-# 🚀 เริ่มการทำงานของระบบหลัก (เมื่อล็อกอินผ่าน)
+# 🚀 เริ่มการทำงานของระบบหลัก
 # ==========================================
 
 # ซ่อนปุ่มกากบาทของ uploader
@@ -198,7 +184,6 @@ if "uploader_key" not in st.session_state:
 with st.sidebar:
     st.title("📦 การจัดการสต็อก")
     
-    # ปุ่มออกจากระบบ (Logout)
     if st.button("🚪 ออกจากระบบ (Logout)", use_container_width=True):
         st.session_state.authenticated = False
         st.rerun()
