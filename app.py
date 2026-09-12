@@ -17,7 +17,7 @@ st.set_page_config(
 # ==========================================
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700;800&display=swap');
     
     html, body, [class*="css"] {
         font-family: 'Sarabun', sans-serif;
@@ -253,14 +253,25 @@ if "uploader_key" not in st.session_state:
 
 # --- เมนูด้านข้าง (Sidebar) ---
 with st.sidebar:
-    st.markdown("## 📦 การจัดการสต็อก")
+    st.markdown("""
+        <div style="font-size: 24px; font-weight: 800; color: #0f172a; margin-bottom: 8px;">
+            📦 การจัดการสต็อก
+        </div>
+    """, unsafe_allow_html=True)
     
     if st.button("🚪 ออกจากระบบ (Logout)", use_container_width=True):
         st.session_state.authenticated = False
         st.rerun()
         
     st.divider()
-    st.markdown("##### 🧭 ฟังก์ชันการทำงาน")
+    
+    # 1. หัวข้อหลัก: ฟังก์ชันการทำงาน (ตัวอักษรใหญ่ หนา พร้อมแถบสีนำสายตา)
+    st.markdown("""
+        <div style="font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; border-left: 4px solid #2563eb; padding-left: 8px;">
+            🧭 ฟังก์ชันการทำงาน
+        </div>
+    """, unsafe_allow_html=True)
+    
     selected_menu = st.radio(
         "เลือกฟังก์ชัน:",
         options=[
@@ -275,11 +286,23 @@ with st.sidebar:
     )
     
     st.divider()
-    st.markdown("##### 📍 โซนสินค้า (30 โซน)")
+    
+    # 2. หัวข้อหลัก: โซนสินค้า (30 โซน) (ตัวอักษรใหญ่ หนา พร้อมแถบสีเขียว)
+    st.markdown("""
+        <div style="font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; border-left: 4px solid #10b981; padding-left: 8px;">
+            📍 โซนสินค้า (30 โซน)
+        </div>
+    """, unsafe_allow_html=True)
     selected_zone = st.selectbox("เลือกโซนที่ต้องการเข้าดู:", options=ALL_ZONES, index=0)
     
     st.divider()
-    st.markdown(f"##### ⚙️ จัดการข้อมูล [โซน {selected_zone}]")
+    
+    # 3. หัวข้อหลัก: จัดการข้อมูล [โซน XX] (ตัวอักษรใหญ่ หนา พร้อมแถบสีส้ม)
+    st.markdown(f"""
+        <div style="font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; border-left: 4px solid #f59e0b; padding-left: 8px;">
+            ⚙️ จัดการข้อมูล [โซน {selected_zone}]
+        </div>
+    """, unsafe_allow_html=True)
     
     with st.expander(f"📥 แนบไฟล์ข้อมูลเข้าโซน {selected_zone}", expanded=False):
         uploaded_files = st.file_uploader(
