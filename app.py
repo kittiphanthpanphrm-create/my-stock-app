@@ -106,7 +106,7 @@ st.markdown("""
         gap: 6px;
     }
     .kpi-value {
-        font-size: 30px;
+        font-size: 28px;
         font-weight: 700;
         line-height: 1.2;
     }
@@ -366,7 +366,7 @@ with st.sidebar:
         
     st.divider()
     
-    # 1. ฟังก์ชันการทำงาน (คงเมนูเดิมไว้ 5 ตัวเลือก)
+    # 1. ฟังก์ชันการทำงาน
     st.markdown("""
         <div style="font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; border-left: 4px solid #2563eb; padding-left: 8px;">
             🧭 ฟังก์ชันการทำงาน
@@ -516,13 +516,13 @@ df_trans = st.session_state.trans_df
 # 🧭 จัดการแสดงผลตามเมนูที่เลือก
 # ==========================================
 
-# --- 0. หน้าแดชบอร์ดภาพรวมระบบ (แสดงรายงานรับเข้า/ขายที่นี่) ---
+# --- 0. หน้าแดชบอร์ดภาพรวมระบบ (แสดงการซื้อและการขายทั้ง 30 โซน) ---
 if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
     st.markdown("""
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
             <h1 style="font-size: 28px; font-weight: 800; margin: 0; color: #0f172a;">📊 แดชบอร์ดภาพรวมระบบคลังสินค้า (30 โซน)</h1>
         </div>
-        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">ศูนย์รวมสถิติ ตัวเลขชี้วัดหลัก (KPIs) สถานะสต็อกสินค้า และรายงานการรับเข้า-ขายสินค้าทั่วทั้งระบบ</p>
+        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">ศูนย์รวมสถิติ ตัวเลขชี้วัดหลัก (KPIs) ยอดซื้อ-ยอดขาย และสถานะสินค้าคงคลังทั่วทั้ง 30 โซน</p>
     """, unsafe_allow_html=True)
 
     if not df_all.empty and "คงเหลือ" in df_all.columns:
@@ -570,9 +570,10 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
                 </div>
             """, unsafe_allow_html=True)
 
-        # KPI สรุปยอดรับเข้า / ยอดขาย
+        # KPI สรุปยอดซื้อ (รับเข้า) และยอดขาย (30 โซน)
         in_sum = 0
         out_sum = 0
+        df_trans_calc = pd.DataFrame()
         if not df_trans.empty:
             df_trans_calc = df_trans.copy()
             df_trans_calc["จำนวน_num"] = pd.to_numeric(df_trans_calc["จำนวน"], errors="coerce").fillna(0)
@@ -583,15 +584,15 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
         with tc1:
             st.markdown(f"""
                 <div class="kpi-card" style="border-left: 5px solid #059669;">
-                    <div class="kpi-title">📥 ยอดรวมรับเข้าสินค้าทั้งหมด</div>
+                    <div class="kpi-title">📥 ยอดรวมรับเข้า (สั่งซื้อ) ทั้ง 30 โซน</div>
                     <div class="kpi-value" style="color: #059669;">+{in_sum:,} <span style="font-size: 15px;">ชิ้น</span></div>
-                    <div class="kpi-sub">บันทึกสะสมจากเอกสารรับเข้า</div>
+                    <div class="kpi-sub">บันทึกสะสมจากเอกสารรับเข้าสินค้า</div>
                 </div>
             """, unsafe_allow_html=True)
         with tc2:
             st.markdown(f"""
                 <div class="kpi-card" style="border-left: 5px solid #ef4444;">
-                    <div class="kpi-title">📤 ยอดรวมขายสินค้าทั้งหมด</div>
+                    <div class="kpi-title">📤 ยอดรวมการขายสินค้าทั้ง 30 โซน</div>
                     <div class="kpi-value" style="color: #ef4444;">-{out_sum:,} <span style="font-size: 15px;">ชิ้น</span></div>
                     <div class="kpi-sub">บันทึกสะสมจากเอกสารยอดขาย</div>
                 </div>
@@ -599,24 +600,37 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
 
         st.write("")
 
-        # แผนภูมิวิเคราะห์
-        col_g1, col_g2 = st.columns([1.6, 1])
+        # แผนภูมิเปรียบเทียบการซื้อ vs การขาย และ แผนภูมิสต็อก
+        col_g1, col_g2 = st.columns(2)
         with col_g1:
             with st.container(border=True):
-                st.markdown("##### 📍 ปริมาณสินค้าแยกตามแต่ละโซน (SKU Count)")
-                zone_counts = df_dash.groupby("โซน").size().sort_values(ascending=False)
-                st.bar_chart(zone_counts, color="#3b82f6")
+                st.markdown("##### 🛒 เปรียบเทียบยอดรับเข้า (ซื้อ) vs ยอดขาย แยกตามโซน")
+                if not df_trans_calc.empty:
+                    piv_zone = df_trans_calc.pivot_table(
+                        index="โซน", 
+                        columns="ประเภทธุรกรรม", 
+                        values="จำนวน_num", 
+                        aggfunc="sum", 
+                        fill_value=0
+                    )
+                    chart_cols = [c for c in ["รับเข้าสินค้า", "ขายสินค้า"] if c in piv_zone.columns]
+                    if chart_cols:
+                        st.bar_chart(piv_zone[chart_cols], color=["#10b981", "#ef4444"] if len(chart_cols)==2 else None)
+                    else:
+                        st.info("ยังไม่มีข้อมูลธุรกรรมรับเข้าหรือขาย")
+                else:
+                    st.info("อัปโหลดไฟล์รับเข้าหรือขายในโหมด Admin เพื่อดูกราฟเปรียบเทียบ")
 
         with col_g2:
             with st.container(border=True):
-                st.markdown("##### 🏷️ 10 อันดับแท็กที่มีสต็อกชิ้นมากที่สุด")
-                tag_stock = df_dash.groupby("แท็ก {Tag}")["คงเหลือ_ตัวเลข"].sum().sort_values(ascending=False).head(10)
-                st.bar_chart(tag_stock, color="#10b981")
+                st.markdown("##### 📍 ปริมาณสินค้าคงคลังแยกตามแต่ละโซน (SKU Count)")
+                zone_counts = df_dash.groupby("โซน").size().sort_values(ascending=False)
+                st.bar_chart(zone_counts, color="#3b82f6")
 
         st.divider()
 
-        # ตารางสรุปภาพรวมรายโซน
-        st.markdown("#### 📋 ตารางสรุปภาพรวมแยกตามโซนสินค้า")
+        # ตารางสรุปภาพรวม 30 โซน (รวมคอลัมน์รับเข้า-ขาย)
+        st.markdown("#### 📋 ตารางสรุปภาพรวมสถานะและธุรกรรมแยกตามโซนสินค้า (30 โซน)")
         zone_summary_table = df_dash.groupby("โซน").agg(
             จำนวนรายการ_SKU=("รหัสสินค้า", "count"),
             ยอดชิ้นคงคลังรวม=("คงเหลือ_ตัวเลข", "sum"),
@@ -624,29 +638,40 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
             รายการสต็อกศูนย์=("คงเหลือ_ตัวเลข", lambda x: (x == 0).sum())
         ).reset_index()
 
+        # รวมข้อมูลรับเข้าและขายเข้าสู่ตารางสรุปรายโซน
+        if not df_trans_calc.empty:
+            in_by_zone = df_trans_calc[df_trans_calc["ประเภทธุรกรรม"] == "รับเข้าสินค้า"].groupby("โซน")["จำนวน_num"].sum().reset_index(name="ยอดรับเข้ารวม (ชิ้น)")
+            out_by_zone = df_trans_calc[df_trans_calc["ประเภทธุรกรรม"] == "ขายสินค้า"].groupby("โซน")["จำนวน_num"].sum().reset_index(name="ยอดขายรวม (ชิ้น)")
+            
+            zone_summary_table = zone_summary_table.merge(in_by_zone, on="โซน", how="left").fillna({"ยอดรับเข้ารวม (ชิ้น)": 0})
+            zone_summary_table = zone_summary_table.merge(out_by_zone, on="โซน", how="left").fillna({"ยอดขายรวม (ชิ้น)": 0})
+            zone_summary_table["ยอดรับเข้ารวม (ชิ้น)"] = zone_summary_table["ยอดรับเข้ารวม (ชิ้น)"].astype(int)
+            zone_summary_table["ยอดขายรวม (ชิ้น)"] = zone_summary_table["ยอดขายรวม (ชิ้น)"].astype(int)
+        else:
+            zone_summary_table["ยอดรับเข้ารวม (ชิ้น)"] = 0
+            zone_summary_table["ยอดขายรวม (ชิ้น)"] = 0
+
         st.dataframe(zone_summary_table, use_container_width=True)
 
         out_dash = io.BytesIO()
         with pd.ExcelWriter(out_dash, engine="openpyxl") as writer:
             zone_summary_table.to_excel(writer, sheet_name="Zone_Summary", index=False)
             df_dash.drop(columns=["คงเหลือ_ตัวเลข"], errors="ignore").to_excel(writer, sheet_name="All_Inventory", index=False)
+            if not df_trans.empty:
+                df_trans.to_excel(writer, sheet_name="Transactions", index=False)
 
         st.download_button(
-            label="📥 ดาวน์โหลดรายงานภาพรวมทั้งคลัง (Excel)",
+            label="📥 ดาวน์โหลดรายงานสรุปภาพรวม 30 โซน (Excel)",
             data=out_dash.getvalue(),
-            file_name="รายงานภาพรวมคลังสินค้า_30โซน.xlsx",
+            file_name="รายงานสรุปคลังสินค้า_ซื้อขาย_30โซน.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             type="primary"
         )
 
         st.divider()
 
-        # ========================================================
-        # 📑 ส่วนแสดงรายงานรับเข้าและขายสินค้าบนแดชบอร์ดโดยตรง
-        # ========================================================
-        st.markdown("### 📑 รายงานประวัติการรับเข้าและยอดขายสินค้า (30 โซน)")
-        st.caption("บันทึกการทำรายการที่ประมวลผลผ่านเอกสารรับเข้าและขายสินค้า")
-
+        # ประวัติบันทึกธุรกรรมการซื้อ-ขายบนแดชบอร์ด
+        st.markdown("### 📑 ประวัติรายการสั่งซื้อ (รับเข้า) และรายการขายสินค้า")
         if not df_trans.empty:
             with st.container(border=True):
                 f_c1, f_c2, f_c3 = st.columns(3)
@@ -673,9 +698,9 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
 
             s_c1, s_c2 = st.columns(2)
             with s_c1:
-                st.metric("📋 จำนวนแถวรายการในประวัติ", f"{total_items_log:,} รายการ")
+                st.metric("📋 จำนวนรายการธุรกรรม", f"{total_items_log:,} รายการ")
             with s_c2:
-                st.metric("🔢 ยอดรวมจำนวนชิ้นตามตัวกรอง", f"{total_qty_log:,} ชิ้น")
+                st.metric("🔢 ปริมาณรวมตามตัวกรอง", f"{total_qty_log:,} ชิ้น")
 
             display_trans = filtered_trans.drop(columns=["จำนวน_num"], errors="ignore")
             st.dataframe(display_trans, use_container_width=True)
@@ -692,7 +717,7 @@ if "แดชบอร์ดภาพรวมระบบ" in selected_menu:
                 key="btn_download_trans_dash"
             )
         else:
-            st.info("💡 ยังไม่มีประวัติการรับเข้าหรือขายสินค้า เมื่ออัปโหลดเอกสารในโหมด Admin ประวัติจะแสดงที่นี่โดยอัตโนมัติ")
+            st.info("💡 ขณะนี้ยังไม่มีประวัติการทำรายการรับเข้าหรือขาย เมื่ออัปโหลดไฟล์ในโหมด Admin ระบบจะบันทึกและแสดงสถิติที่นี่ทันที")
 
     else:
         st.info("💡 ขณะนี้ยังไม่มีข้อมูลในระบบ สามารถล็อกอินโหมด Admin เพื่อเริ่มนำเข้าข้อมูลได้ทันที")
